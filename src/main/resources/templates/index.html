@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScreenAI - Live Screen Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #screenView {
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+            background-color: #000;
+            display: block;
+        }
+        
+        .status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+            line-height: 1.4;
+            min-width: 250px;
+        }
+        
+        .status.connected {
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .status.disconnected {
+            border-left: 4px solid #f44336;
+        }
+        
+        .status.connecting {
+            border-left: 4px solid #ff9800;
+        }
+        
+        .status-line {
+            margin: 2px 0;
+        }
+        
+        .status-value {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .capture-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 1000;
+            border-left: 4px solid #2196F3;
+        }
+        
+        .error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .error button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        
+        .error button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="status" class="status connecting">
+        <div class="status-line">Status: <span class="status-value">Connecting...</span></div>
+        <div class="status-line">Viewers: <span id="viewerCount" class="status-value">0</span></div>
+        <div class="status-line">Frames: <span id="frameCount" class="status-value">0</span></div>
+    </div>
+    
+    <div class="capture-info">
+        <div>🎥 ScreenAI</div>
+        <div>📱 JavaCV Real-time Capture</div>
+        <div>🌐 WiFi Network Enabled</div>
+    </div>
+    
+    <img id="screenView" alt="Screen Share Stream" />
+    
+    <div id="error" class="error">
+        <h3>Connection Error</h3>
+        <p id="errorMessage">Unable to connect to the screen sharing server.</p>
+        <button onclick="location.reload()">Retry Connection</button>
+    </div>
+
+    <script>
+        class ScreenViewer {
+            constructor() {
+                this.socket = null;
+                this.screenView = document.getElementById('screenView');
+                this.statusElement = document.getElementById('status');
+                this.errorElement = document.getElementById('error');
+                this.errorMessage = document.getElementById('errorMessage');
+                this.viewerCountElement = document.getElementById('viewerCount');
+                this.frameCountElement = document.getElementById('frameCount');
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 5;
+                this.frameCount = 0;
+                this.lastFrameTime = Date.now();
+                
+                this.connect();
+                this.startFrameRateCounter();
+            }
+            
+            startFrameRateCounter() {
+                setInterval(() => {
+                    const now = Date.now();
+                    const timeDiff = now - this.lastFrameTime;
+                    if (timeDiff > 5000) { // No frames for 5 seconds
+                        this.updateStatus('No frames received', 'disconnected');
+                    }
+                }, 1000);
+            }
+            
+            connect() {
+                try {
+                    // Determine WebSocket URL (works for both localhost and network access)
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${protocol}//${window.location.host}/screenshare`;
+                    
+                    this.socket = new WebSocket(wsUrl);
+                    
+                    this.socket.onopen = () => {
+                        console.log('Connected to screen share server');
+                        this.updateStatus('Connected', 'connected');
+                        this.hideError();
+                        this.reconnectAttempts = 0;
+                    };
+                    
+                    this.socket.onmessage = (event) => {
+                        try {
+                            const message = JSON.parse(event.data);
+                            this.handleMessage(message);
+                        } catch (error) {
+                            console.error('Failed to parse message:', error);
+                        }
+                    };
+                    
+                    this.socket.onclose = () => {
+                        console.log('Disconnected from screen share server');
+                        this.updateStatus('Disconnected', 'disconnected');
+                        this.attemptReconnect();
+                    };
+                    
+                    this.socket.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.updateStatus('Connection Error', 'disconnected');
+                        this.showError('Failed to connect to screen sharing server. Please check your connection.');
+                    };
+                    
+                } catch (error) {
+                    console.error('Failed to create WebSocket connection:', error);
+                    this.showError('Unable to establish connection to screen sharing server.');
+                }
+            }
+            
+            handleMessage(message) {
+                switch (message.type) {
+                    case 'connected':
+                        console.log('Server acknowledged connection');
+                        break;
+                        
+                    case 'frame':
+                        // Update the screen image with new frame data
+                        this.screenView.src = message.data;
+                        this.updateStatus('Streaming', 'connected');
+                        break;
+                        
+                    default:
+                        console.log('Unknown message type:', message.type);
+                }
+            }
+            
+            updateStatus(text, className) {
+                this.statusElement.textContent = text;
+                this.statusElement.className = `status ${className}`;
+            }
+            
+            showError(message) {
+                this.errorMessage.textContent = message;
+                this.errorElement.style.display = 'block';
+            }
+            
+            hideError() {
+                this.errorElement.style.display = 'none';
+            }
+            
+            attemptReconnect() {
+                if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                    this.reconnectAttempts++;
+                    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+                    
+                    this.updateStatus(`Reconnecting in ${Math.ceil(delay/1000)}s... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`, 'connecting');
+                    
+                    setTimeout(() => {
+                        this.updateStatus('Reconnecting...', 'connecting');
+                        this.connect();
+                    }, delay);
+                } else {
+                    this.showError('Failed to reconnect after multiple attempts. Please refresh the page to try again.');
+                }
+            }
+        }
+        
+        // Start the screen viewer when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new ScreenViewer();
+        });
+    </script>
+</body>
+</html>
