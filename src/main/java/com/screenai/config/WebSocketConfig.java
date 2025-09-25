@@ -4,7 +4,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
-
+import org.springframework.lang.NonNull;
 import com.screenai.handler.ScreenShareWebSocketHandler;
 
 /**
@@ -26,7 +26,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
      * @param registry WebSocket handler registry
      */
     @Override
-    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+    public void registerWebSocketHandlers(@NonNull WebSocketHandlerRegistry registry) {
         // Register the screen share handler for endpoint /screenshare
         // Allow all origins for simplicity (in production, restrict this)
         registry.addHandler(screenShareHandler, "/screenshare")
