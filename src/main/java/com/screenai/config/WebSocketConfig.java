@@ -28,7 +28,6 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         // Register the screen share handler for endpoint /screenshare
-        // Allow all origins for simplicity (in production, restrict this)
         registry.addHandler(screenShareHandler, "/screenshare")
                 .setAllowedOrigins("*");
     }
