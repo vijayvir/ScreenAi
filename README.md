@@ -1,5 +1,4 @@
 
-
 # 🖥️ ScreenAI - Real-time Screen Sharing Application
 
 A lightweight, cross-platform screen sharing application built with Spring Boot and JavaCV. This application provides real-time server desktop streaming using WebSocket technology .
