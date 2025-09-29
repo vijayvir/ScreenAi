@@ -32,7 +32,7 @@ import com.screenai.handler.ScreenShareWebSocketHandler;
 public class ScreenCaptureService {
 
     private static final Logger logger = LoggerFactory.getLogger(ScreenCaptureService.class);
-    private static final int FRAME_RATE = 50; // 30 FPS for smoother streaming
+    private static final int FRAME_RATE =30; // 30 FPS for smoother streaming
 
     @Autowired
     private ScreenShareWebSocketHandler webSocketHandler;
