@@ -32,7 +32,7 @@ import com.screenai.handler.ScreenShareWebSocketHandler;
 public class ScreenCaptureService {
 
     private static final Logger logger = LoggerFactory.getLogger(ScreenCaptureService.class);
-    private static final int FRAME_RATE = 10; // 10 FPS for balance between performance and smoothness
+    private static final int FRAME_RATE = 50; // 30 FPS for smoother streaming
 
     @Autowired
     private ScreenShareWebSocketHandler webSocketHandler;
@@ -167,6 +167,7 @@ public class ScreenCaptureService {
         scheduler = Executors.newScheduledThreadPool(1);
         
         scheduler.scheduleAtFixedRate(() -> {
+            long startTime = System.nanoTime();
             try {
                 String frameData = captureScreenAsBase64();
                 if (frameData != null) {
@@ -178,6 +179,9 @@ public class ScreenCaptureService {
             } catch (Exception e) {
                 logger.error("Error during screen capture broadcast", e);
             }
+            long endTime = System.nanoTime();
+            long latencyMs = (endTime - startTime) / 1_000_000;
+            logger.info("Frame latency: {} ms", latencyMs);
         }, 0, 1000 / FRAME_RATE, TimeUnit.MILLISECONDS);
         
         logger.info("Screen capture started at {} FPS (using JavaCV)", FRAME_RATE);
