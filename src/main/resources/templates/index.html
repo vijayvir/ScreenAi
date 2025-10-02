@@ -8,7 +8,24 @@
         * {
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
+            b        <div style="padding: 10px; color: white; text-align: center;">
+            <!-- 🕒 Stream Timestamp -->
+            <div id="streamTimestamp" class="stream-timestamp" style="display: none;">
+                <div class="stream-timestamp-row">
+                    <span class="stream-timestamp-label">Started:</span>
+                    <span id="compactStartTime" class="stream-timestamp-value">--:--:--</span>
+                </div>
+                <div class="stream-timestamp-row">
+                    <span class="stream-timestamp-label">Elapsed:</span>
+                    <span id="compactElapsedTime" class="stream-timestamp-value elapsed">00:00:00</span>
+                </div>
+            </div>
+            
+            <button id="stopBtn" class="btn btn-danger">
+                <span id="stopBtnText">🛑 Stop Streaming</span>
+                <span id="stopLoading" class="loading hidden">⏳</span>
+            </button>
+        </div>box;
         }
         
         body {
@@ -120,6 +137,107 @@
         .hidden {
             display: none !important;
         }
+
+        /* 🕒 Stream Timestamp Styles */
+        .stream-timestamp {
+            display: inline-block;
+            margin-right: 20px;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 8px;
+            color: white;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.2;
+            vertical-align: middle;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(5px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .stream-timestamp-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 2px 0;
+        }
+
+        .stream-timestamp-label {
+            font-size: 10px;
+            opacity: 0.8;
+            min-width: 40px;
+        }
+
+        .stream-timestamp-value {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .stream-timestamp-value.elapsed {
+            color: #FF9800;
+            font-size: 12px;
+        }
+
+        /* Session Summary on Home Screen */
+        .session-results {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px auto;
+            max-width: 500px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .session-results h3 {
+            color: #4CAF50;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 18px;
+        }
+
+        .session-detail {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 14px;
+        }
+
+        .session-detail:last-child {
+            border-bottom: none;
+        }
+
+        .session-detail-label {
+            opacity: 0.9;
+            font-weight: 500;
+        }
+
+        .session-detail-value {
+            color: #4CAF50;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+
+        .session-duration {
+            color: #FF9800 !important;
+            font-size: 16px !important;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .stream-timestamp {
+                display: block;
+                margin: 0 auto 15px auto;
+                font-size: 10px;
+                padding: 6px 10px;
+            }
+            
+            .stream-timestamp-value.elapsed {
+                font-size: 11px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -151,10 +269,43 @@
     <div id="streamContainer" class="stream-container hidden">
         <img id="screenView" alt="Screen Stream" />
         <div style="padding: 10px; color: white; text-align: center;">
+            <!-- 🕒 Compact Stream Timestamp -->
+            <div id="streamTimestamp" class="stream-timestamp" style="display: none;">
+                <div class="stream-timestamp-row">
+                    <span class="stream-timestamp-label">Started:</span>
+                    <span id="compactStartTime" class="stream-timestamp-value">--:--:--</span>
+                </div>
+                <div class="stream-timestamp-row">
+                    <span class="stream-timestamp-label">Elapsed:</span>
+                    <span id="compactElapsedTime" class="stream-timestamp-value elapsed">00:00:00</span>
+                </div>
+            </div>
+            
             <button id="stopBtn" class="btn btn-danger">
-                <span id="stopBtnText">🛑 Stop Streaming</span>
+                <span id="stopBtnText">� Stop Streaming</span>
                 <span id="stopLoading" class="loading hidden">⏳</span>
             </button>
+        </div>
+    </div>
+
+    <!-- 🕒 Session Results (shown on home screen after session) -->
+    <div id="sessionResults" class="session-results" style="display: none;">
+        <h3>📊 Session Completed</h3>
+        <div class="session-detail">
+            <span class="session-detail-label">🚀 Started:</span>
+            <span id="resultStartTime" class="session-detail-value">--:--:--</span>
+        </div>
+        <div class="session-detail">
+            <span class="session-detail-label">🛑 Ended:</span>
+            <span id="resultStopTime" class="session-detail-value">--:--:--</span>
+        </div>
+        <div class="session-detail">
+            <span class="session-detail-label">⏱️ Duration:</span>
+            <span id="resultDuration" class="session-detail-value session-duration">00:00:00</span>
+        </div>
+        <div class="session-detail">
+            <span class="session-detail-label">📅 Date:</span>
+            <span id="resultDate" class="session-detail-value">--/--/----</span>
         </div>
     </div>
 
@@ -165,6 +316,11 @@
                 this.isStreaming = false;
                 this.intentionalStop = false;
                 
+                // 🕒 Timestamp tracking
+                this.startTime = null;
+                this.stopTime = null;
+                this.elapsedTimer = null;
+                
                 // Get DOM elements
                 this.controlPanel = document.getElementById('controlPanel');
                 this.streamContainer = document.getElementById('streamContainer');
@@ -173,6 +329,18 @@
                 this.viewerCount = document.getElementById('viewerCount');
                 this.errorDiv = document.getElementById('error');
                 this.errorMessage = document.getElementById('errorMessage');
+                
+                // 🕒 Timestamp elements
+                this.streamTimestamp = document.getElementById('streamTimestamp');
+                this.compactStartTime = document.getElementById('compactStartTime');
+                this.compactElapsedTime = document.getElementById('compactElapsedTime');
+                
+                // Session results elements
+                this.sessionResults = document.getElementById('sessionResults');
+                this.resultStartTime = document.getElementById('resultStartTime');
+                this.resultStopTime = document.getElementById('resultStopTime');
+                this.resultDuration = document.getElementById('resultDuration');
+                this.resultDate = document.getElementById('resultDate');
                 
                 // Buttons
                 this.startBtn = document.getElementById('startBtn');
@@ -184,27 +352,172 @@
                 
                 // Initialize
                 this.updateStatus('Ready');
+                this.resetTimestamps();
+            }
+            
+            // 🕒 Timestamp Management
+            initializeTimestamps() {
+                this.startTime = new Date();
+                this.stopTime = null;
+                
+                // Show compact timestamp in stream view
+                this.streamTimestamp.style.display = 'inline-block';
+                
+                // Update compact start time
+                this.compactStartTime.textContent = this.formatTime(this.startTime);
+                
+                // Hide session results on home screen
+                this.sessionResults.style.display = 'none';
+                
+                // Start elapsed timer
+                this.startElapsedTimer();
+                
+                console.log('🕒 Session started at:', this.formatDateTime(this.startTime));
+            }
+            
+            finalizeTimestamps() {
+                this.stopTime = new Date();
+                
+                // Stop elapsed timer
+                if (this.elapsedTimer) {
+                    clearInterval(this.elapsedTimer);
+                    this.elapsedTimer = null;
+                }
+                
+                // Hide compact timestamp in stream view
+                this.streamTimestamp.style.display = 'none';
+                
+                // Show session results on home screen
+                this.showSessionResults();
+                
+                console.log('🕒 Session ended at:', this.formatDateTime(this.stopTime));
+                console.log('📊 Total session duration:', this.formatDuration(this.stopTime - this.startTime));
+            }
+            
+            startElapsedTimer() {
+                this.elapsedTimer = setInterval(() => {
+                    if (this.startTime && this.isStreaming) {
+                        const elapsed = new Date() - this.startTime;
+                        this.compactElapsedTime.textContent = this.formatDuration(elapsed);
+                    }
+                }, 1000); // Update every second
+            }
+            
+            showSessionResults() {
+                if (!this.startTime || !this.stopTime) return;
+                
+                const duration = this.stopTime - this.startTime;
+                
+                // Populate session results
+                this.resultStartTime.textContent = this.formatTime(this.startTime);
+                this.resultStopTime.textContent = this.formatTime(this.stopTime);
+                this.resultDuration.textContent = this.formatDuration(duration);
+                this.resultDate.textContent = this.formatDate(this.startTime);
+                
+                // Show session results on home screen
+                this.sessionResults.style.display = 'block';
+                
+                // Log detailed summary to console
+                console.log('📊 Complete Session Summary:', {
+                    startTime: this.formatDateTime(this.startTime),
+                    stopTime: this.formatDateTime(this.stopTime),
+                    duration: this.formatDuration(duration),
+                    durationMs: duration,
+                    date: this.formatDate(this.startTime),
+                    userAgent: navigator.userAgent,
+                    timestamp: new Date().toISOString()
+                });
+                
+                // Auto-hide after 30 seconds
+                setTimeout(() => {
+                    this.hideSessionResults();
+                }, 30000);
+            }
+            
+            hideSessionResults() {
+                this.sessionResults.style.display = 'none';
+                this.resetTimestamps();
+            }
+            
+            resetTimestamps() {
+                this.startTime = null;
+                this.stopTime = null;
+                
+                if (this.elapsedTimer) {
+                    clearInterval(this.elapsedTimer);
+                    this.elapsedTimer = null;
+                }
+                
+                // Reset compact timestamp display
+                this.compactStartTime.textContent = '--:--:--';
+                this.compactElapsedTime.textContent = '00:00:00';
+                
+                // Hide elements
+                this.streamTimestamp.style.display = 'none';
+                this.sessionResults.style.display = 'none';
+            }
+            
+            formatTime(date) {
+                return date.toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+            }
+            
+            formatDateTime(date) {
+                return date.toLocaleString([], {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+            }
+            
+            formatDuration(milliseconds) {
+                const totalSeconds = Math.floor(milliseconds / 1000);
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
+                
+                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+            
+            formatDate(date) {
+                return date.toLocaleDateString([], {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                });
             }
             
             async startStreaming() {
                 this.setButtonLoading(this.startBtn, 'startBtnText', 'startLoading', true);
                 
                 try {
-                    console.log('Starting streaming...');
+                    console.log('🚀 Initiating streaming session...');
                     // Call API to start capture
                     const response = await fetch('/api/start-capture');
                     const result = await response.json();
-                    console.log('API response:', result);
+                    console.log('📡 API response:', result);
                     
                     if (result.success) {
                         this.updateStatus('Starting...');
+                        
+                        // 🕒 Initialize timestamps when streaming starts
+                        this.initializeTimestamps();
+                        
                         // Start WebSocket connection
                         this.connectWebSocket();
                     } else {
                         this.showError(`Failed to start: ${result.message}`);
                     }
                 } catch (error) {
-                    console.error('Start streaming error:', error);
+                    console.error('❌ Start streaming error:', error);
                     this.showError(`Network error: ${error.message}`);
                 } finally {
                     this.setButtonLoading(this.startBtn, 'startBtnText', 'startLoading', false);
@@ -213,15 +526,22 @@
             
             async stopStreaming() {
                 this.setButtonLoading(this.stopBtn, 'stopBtnText', 'stopLoading', true);
-                this.intentionalStop = true; // Mark this as intentional stop
+                this.intentionalStop = true;
                 
                 try {
-                    // Call API to stop capture first
+                    console.log('🛑 Stopping streaming session...');
+                    
+                    // Call API to stop capture
                     const response = await fetch('/api/stop-capture');
                     const result = await response.json();
                     
                     if (result.success) {
-                        // Stop WebSocket after successful API call
+                        console.log('✅ Capture stopped successfully');
+                        
+                        // 🕒 Finalize timestamps when stopping
+                        this.finalizeTimestamps();
+                        
+                        // Close WebSocket and return to dashboard
                         if (this.socket) {
                             this.socket.close();
                             this.socket = null;
@@ -231,7 +551,10 @@
                         this.showError(`Failed to stop: ${result.message}`);
                     }
                 } catch (error) {
+                    console.error('❌ Stop streaming error:', error);
                     this.showError(`Network error: ${error.message}`);
+                    // Still finalize timestamps even on error
+                    this.finalizeTimestamps();
                 } finally {
                     this.setButtonLoading(this.stopBtn, 'stopBtnText', 'stopLoading', false);
                     // Reset the flag after a small delay to ensure onclose handler has finished
@@ -249,7 +572,7 @@
                 this.socket = new WebSocket(wsUrl);
                 
                 this.socket.onopen = () => {
-                    console.log('WebSocket connected successfully!');
+                    console.log('✅ WebSocket connected successfully!');
                     this.updateStatus('Connected');
                     this.showStream();
                 };
@@ -257,45 +580,38 @@
                 this.socket.onmessage = (event) => {
                     try {
                         const message = JSON.parse(event.data);
-                        console.log('WebSocket message received:', message.type);
                         if (message.type === 'frame') {
-                            console.log('Setting frame data to image, size:', message.data.length, 'chars');
                             this.screenView.src = message.data;
                             this.updateStatus('Streaming');
-                        } else if (message.type === 'connected') {
-                            console.log('Server acknowledged connection');
                         }
                     } catch (error) {
-                        console.error('Failed to parse WebSocket message:', error);
+                        console.error('❌ Failed to parse WebSocket message:', error);
                     }
                 };
                 
                 this.socket.onclose = (event) => {
-                    console.log('WebSocket closed - Code:', event.code, 'Reason:', event.reason);
+                    console.log('🔌 WebSocket closed - Code:', event.code);
                     this.updateStatus('Disconnected');
-                    // Only show error if connection was lost unexpectedly (not intentional stop)
+                    
+                    // Only handle as unexpected disconnection if streaming and not intentional
                     if (this.isStreaming && !this.intentionalStop) {
+                        console.warn('⚠️ Unexpected disconnection during streaming');
+                        // Finalize timestamps on unexpected disconnection
+                        this.finalizeTimestamps();
                         this.showError('Connection lost. Please try again.');
                     }
                 };
                 
                 this.socket.onerror = (error) => {
-                    console.error('WebSocket error occurred:', error);
-                    // Removed error message display - just log to console
+                    console.error('❌ WebSocket error:', error);
                 };
             }
             
             showStream() {
-                console.log('showStream() called - switching to stream view');
+                console.log('🎬 Switching to stream view');
                 this.isStreaming = true;
-                
-                console.log('Hiding control panel');
                 this.controlPanel.classList.add('hidden');
-                
-                console.log('Showing stream container');
                 this.streamContainer.classList.remove('hidden');
-                
-                console.log('Stream view should now be visible');
             }
             
             backToDashboard() {
@@ -339,11 +655,31 @@
                     button.disabled = false;
                 }
             }
+            
+            // 🕒 Get current session information
+            getSessionInfo() {
+                if (!this.startTime) return null;
+                
+                const now = new Date();
+                const currentStopTime = this.stopTime || now;
+                const duration = currentStopTime - this.startTime;
+                
+                return {
+                    startTime: this.startTime,
+                    stopTime: this.stopTime,
+                    duration: duration,
+                    isActive: this.isStreaming,
+                    formattedStart: this.formatDateTime(this.startTime),
+                    formattedStop: this.stopTime ? this.formatDateTime(this.stopTime) : 'Still streaming',
+                    formattedDuration: this.formatDuration(duration)
+                };
+            }
         }
         
         // Initialize viewer when page loads
         document.addEventListener('DOMContentLoaded', () => {
-            new SimpleViewer();
+            window.viewer = new SimpleViewer();
+            console.log('🎬 ScreenAI Viewer Timestamps initialized');
         });
     </script>
 </body>
