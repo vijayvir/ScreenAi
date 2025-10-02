@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import com.screenai.service.ScreenCaptureService;
 
@@ -21,9 +22,9 @@ import com.screenai.service.ScreenCaptureService;
  * - Thymeleaf for the web interface
  * 
  * The application is cross-platform compatible and works on Windows, macOS, and Linux.
- * Allows viewing screen stream from other devices on the same WiFi network.
  */
 @SpringBootApplication
+@EnableScheduling
 public class ScreenAIApplication implements CommandLineRunner {
 
 	@Autowired

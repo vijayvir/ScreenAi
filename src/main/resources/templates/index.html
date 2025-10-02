@@ -3,52 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ScreenAI - Live Screen Viewer</title>
+    <title>ScreenAI</title>
     <style>
-        body {
+        * {
             margin: 0;
             padding: 0;
-            background-color: #000;
-            font-family: Arial, sans-serif;
-            overflow: hidden;
+            box-sizing: border-box;
         }
         
-        #screenView {
-            width: 100vw;
-            height: 100vh;
-            object-fit: contain;
-            background-color: #000;
-            display: block;
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .control-panel {
+            text-align: center;
+            padding: 30px;
+            background: rgba(44, 62, 80, 0.9);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .control-panel h1 {
+            margin-bottom: 20px;
+            font-size: 2.2em;
         }
         
         .status {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(255,255,255,0.1);
             padding: 15px;
-            border-radius: 8px;
-            font-size: 14px;
-            z-index: 1000;
-            line-height: 1.4;
-            min-width: 250px;
-        }
-        
-        .status.connected {
-            border-left: 4px solid #4CAF50;
-        }
-        
-        .status.disconnected {
-            border-left: 4px solid #f44336;
-        }
-        
-        .status.connecting {
-            border-left: 4px solid #ff9800;
+            border-radius: 10px;
+            margin: 20px auto;
+            max-width: 400px;
         }
         
         .status-line {
-            margin: 2px 0;
+            margin: 8px 0;
+            font-size: 16px;
         }
         
         .status-value {
@@ -56,190 +48,302 @@
             font-weight: bold;
         }
         
-        .capture-info {
-            position: absolute;
-            top: 10px;
-            right: 10px;
+        .btn {
+            padding: 15px 30px;
+            margin: 10px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            transition: all 0.3s;
+            min-width: 180px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-success {
+            background: #27ae60;
             color: white;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 15px;
-            border-radius: 8px;
-            font-size: 12px;
-            z-index: 1000;
-            border-left: 4px solid #2196F3;
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .stream-container {
+            text-align: center;
+            background: #000;
+            padding: 20px;
+        }
+        
+        .stream-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
         
         .error {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            background: #e74c3c;
             color: white;
+            padding: 20px;
             text-align: center;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 30px;
-            border-radius: 10px;
             display: none;
         }
         
-        .error button {
-            background: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 15px;
+        .loading {
+            display: inline-block;
+            animation: spin 1s linear infinite;
         }
         
-        .error button:hover {
-            background: #45a049;
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none !important;
         }
     </style>
 </head>
 <body>
-    <div id="status" class="status connecting">
-        <div class="status-line">Status: <span class="status-value">Connecting...</span></div>
-        <div class="status-line">Viewers: <span id="viewerCount" class="status-value">0</span></div>
-        <div class="status-line">Frames: <span id="frameCount" class="status-value">0</span></div>
+    <!-- Control Panel -->
+    <div id="controlPanel" class="control-panel">
+        <h1>🎥 ScreenAI Viewer</h1>
+        
+        <div id="status" class="status">
+            <div class="status-line">Status: <span id="statusText" class="status-value">Ready</span></div>
+            <div class="status-line">Viewers: <span id="viewerCount" class="status-value">0</span></div>
+        </div>
+        
+        <div>
+            <button id="startBtn" class="btn btn-success">
+                <span id="startBtnText">🚀 Start Streaming</span>
+                <span id="startLoading" class="loading hidden">⏳</span>
+            </button>
+        </div>
     </div>
     
-    <div class="capture-info">
-        <div>🎥 ScreenAI</div>
-        <div>📱 JavaCV Real-time Capture</div>
-        <div>🌐 WiFi Network Enabled</div>
-    </div>
-    
-    <img id="screenView" alt="Screen Share Stream" />
-    
+    <!-- Error Display -->
     <div id="error" class="error">
-        <h3>Connection Error</h3>
-        <p id="errorMessage">Unable to connect to the screen sharing server.</p>
-        <button onclick="location.reload()">Retry Connection</button>
+        <h3>Error</h3>
+        <p id="errorMessage">Something went wrong.</p>
+        <button onclick="location.reload()" class="btn" style="background: white; color: #e74c3c; margin-top: 10px;">Retry</button>
+    </div>
+    
+    <!-- Stream Container -->
+    <div id="streamContainer" class="stream-container hidden">
+        <img id="screenView" alt="Screen Stream" />
+        <div style="padding: 10px; color: white; text-align: center;">
+            <button id="stopBtn" class="btn btn-danger">
+                <span id="stopBtnText">🛑 Stop Streaming</span>
+                <span id="stopLoading" class="loading hidden">⏳</span>
+            </button>
+        </div>
     </div>
 
     <script>
-        class ScreenViewer {
+        class SimpleViewer {
             constructor() {
                 this.socket = null;
-                this.screenView = document.getElementById('screenView');
-                this.statusElement = document.getElementById('status');
-                this.errorElement = document.getElementById('error');
-                this.errorMessage = document.getElementById('errorMessage');
-                this.viewerCountElement = document.getElementById('viewerCount');
-                this.frameCountElement = document.getElementById('frameCount');
-                this.reconnectAttempts = 0;
-                this.maxReconnectAttempts = 5;
-                this.frameCount = 0;
-                this.lastFrameTime = Date.now();
+                this.isStreaming = false;
+                this.intentionalStop = false;
                 
-                this.connect();
-                this.startFrameRateCounter();
+                // Get DOM elements
+                this.controlPanel = document.getElementById('controlPanel');
+                this.streamContainer = document.getElementById('streamContainer');
+                this.screenView = document.getElementById('screenView');
+                this.statusText = document.getElementById('statusText');
+                this.viewerCount = document.getElementById('viewerCount');
+                this.errorDiv = document.getElementById('error');
+                this.errorMessage = document.getElementById('errorMessage');
+                
+                // Buttons
+                this.startBtn = document.getElementById('startBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                
+                // Event listeners
+                this.startBtn.addEventListener('click', () => this.startStreaming());
+                this.stopBtn.addEventListener('click', () => this.stopStreaming());
+                
+                // Initialize
+                this.updateStatus('Ready');
             }
             
-            startFrameRateCounter() {
-                setInterval(() => {
-                    const now = Date.now();
-                    const timeDiff = now - this.lastFrameTime;
-                    if (timeDiff > 5000) { // No frames for 5 seconds
-                        this.updateStatus('No frames received', 'disconnected');
-                    }
-                }, 1000);
-            }
-            
-            connect() {
+            async startStreaming() {
+                this.setButtonLoading(this.startBtn, 'startBtnText', 'startLoading', true);
+                
                 try {
-                    // Determine WebSocket URL (works for both localhost and network access)
-                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                    const wsUrl = `${protocol}//${window.location.host}/screenshare`;
+                    console.log('Starting streaming...');
+                    // Call API to start capture
+                    const response = await fetch('/api/start-capture');
+                    const result = await response.json();
+                    console.log('API response:', result);
                     
-                    this.socket = new WebSocket(wsUrl);
-                    
-                    this.socket.onopen = () => {
-                        console.log('Connected to screen share server');
-                        this.updateStatus('Connected', 'connected');
-                        this.hideError();
-                        this.reconnectAttempts = 0;
-                    };
-                    
-                    this.socket.onmessage = (event) => {
-                        try {
-                            const message = JSON.parse(event.data);
-                            this.handleMessage(message);
-                        } catch (error) {
-                            console.error('Failed to parse message:', error);
-                        }
-                    };
-                    
-                    this.socket.onclose = () => {
-                        console.log('Disconnected from screen share server');
-                        this.updateStatus('Disconnected', 'disconnected');
-                        this.attemptReconnect();
-                    };
-                    
-                    this.socket.onerror = (error) => {
-                        console.error('WebSocket error:', error);
-                        this.updateStatus('Connection Error', 'disconnected');
-                        this.showError('Failed to connect to screen sharing server. Please check your connection.');
-                    };
-                    
+                    if (result.success) {
+                        this.updateStatus('Starting...');
+                        // Start WebSocket connection
+                        this.connectWebSocket();
+                    } else {
+                        this.showError(`Failed to start: ${result.message}`);
+                    }
                 } catch (error) {
-                    console.error('Failed to create WebSocket connection:', error);
-                    this.showError('Unable to establish connection to screen sharing server.');
+                    console.error('Start streaming error:', error);
+                    this.showError(`Network error: ${error.message}`);
+                } finally {
+                    this.setButtonLoading(this.startBtn, 'startBtnText', 'startLoading', false);
                 }
             }
             
-            handleMessage(message) {
-                switch (message.type) {
-                    case 'connected':
-                        console.log('Server acknowledged connection');
-                        break;
-                        
-                    case 'frame':
-                        // Update the screen image with new frame data
-                        this.screenView.src = message.data;
-                        this.updateStatus('Streaming', 'connected');
-                        break;
-                        
-                    default:
-                        console.log('Unknown message type:', message.type);
+            async stopStreaming() {
+                this.setButtonLoading(this.stopBtn, 'stopBtnText', 'stopLoading', true);
+                this.intentionalStop = true; // Mark this as intentional stop
+                
+                try {
+                    // Call API to stop capture first
+                    const response = await fetch('/api/stop-capture');
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        // Stop WebSocket after successful API call
+                        if (this.socket) {
+                            this.socket.close();
+                            this.socket = null;
+                        }
+                        this.backToDashboard();
+                    } else {
+                        this.showError(`Failed to stop: ${result.message}`);
+                    }
+                } catch (error) {
+                    this.showError(`Network error: ${error.message}`);
+                } finally {
+                    this.setButtonLoading(this.stopBtn, 'stopBtnText', 'stopLoading', false);
+                    // Reset the flag after a small delay to ensure onclose handler has finished
+                    setTimeout(() => {
+                        this.intentionalStop = false;
+                    }, 100);
                 }
             }
             
-            updateStatus(text, className) {
-                this.statusElement.textContent = text;
-                this.statusElement.className = `status ${className}`;
+            connectWebSocket() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/screenshare`;
+                console.log('Connecting to WebSocket:', wsUrl);
+                
+                this.socket = new WebSocket(wsUrl);
+                
+                this.socket.onopen = () => {
+                    console.log('WebSocket connected successfully!');
+                    this.updateStatus('Connected');
+                    this.showStream();
+                };
+                
+                this.socket.onmessage = (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        console.log('WebSocket message received:', message.type);
+                        if (message.type === 'frame') {
+                            console.log('Setting frame data to image, size:', message.data.length, 'chars');
+                            this.screenView.src = message.data;
+                            this.updateStatus('Streaming');
+                        } else if (message.type === 'connected') {
+                            console.log('Server acknowledged connection');
+                        }
+                    } catch (error) {
+                        console.error('Failed to parse WebSocket message:', error);
+                    }
+                };
+                
+                this.socket.onclose = (event) => {
+                    console.log('WebSocket closed - Code:', event.code, 'Reason:', event.reason);
+                    this.updateStatus('Disconnected');
+                    // Only show error if connection was lost unexpectedly (not intentional stop)
+                    if (this.isStreaming && !this.intentionalStop) {
+                        this.showError('Connection lost. Please try again.');
+                    }
+                };
+                
+                this.socket.onerror = (error) => {
+                    console.error('WebSocket error occurred:', error);
+                    // Removed error message display - just log to console
+                };
+            }
+            
+            showStream() {
+                console.log('showStream() called - switching to stream view');
+                this.isStreaming = true;
+                
+                console.log('Hiding control panel');
+                this.controlPanel.classList.add('hidden');
+                
+                console.log('Showing stream container');
+                this.streamContainer.classList.remove('hidden');
+                
+                console.log('Stream view should now be visible');
+            }
+            
+            backToDashboard() {
+                this.isStreaming = false;
+                this.controlPanel.classList.remove('hidden');
+                this.streamContainer.classList.add('hidden');
+                this.hideError();
+                this.updateStatus('Ready');
+                
+                // Don't close socket here if it's already closed or being closed intentionally
+                if (this.socket && !this.intentionalStop) {
+                    this.socket.close();
+                    this.socket = null;
+                }
+            }
+            
+            updateStatus(status) {
+                this.statusText.textContent = status;
             }
             
             showError(message) {
                 this.errorMessage.textContent = message;
-                this.errorElement.style.display = 'block';
+                this.errorDiv.style.display = 'block';
             }
             
             hideError() {
-                this.errorElement.style.display = 'none';
+                this.errorDiv.style.display = 'none';
             }
             
-            attemptReconnect() {
-                if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                    this.reconnectAttempts++;
-                    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-                    
-                    this.updateStatus(`Reconnecting in ${Math.ceil(delay/1000)}s... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`, 'connecting');
-                    
-                    setTimeout(() => {
-                        this.updateStatus('Reconnecting...', 'connecting');
-                        this.connect();
-                    }, delay);
+            setButtonLoading(button, textId, loadingId, loading) {
+                const textElement = document.getElementById(textId);
+                const loadingElement = document.getElementById(loadingId);
+                
+                if (loading) {
+                    textElement.classList.add('hidden');
+                    loadingElement.classList.remove('hidden');
+                    button.disabled = true;
                 } else {
-                    this.showError('Failed to reconnect after multiple attempts. Please refresh the page to try again.');
+                    textElement.classList.remove('hidden');
+                    loadingElement.classList.add('hidden');
+                    button.disabled = false;
                 }
             }
         }
         
-        // Start the screen viewer when page loads
+        // Initialize viewer when page loads
         document.addEventListener('DOMContentLoaded', () => {
-            new ScreenViewer();
+            new SimpleViewer();
         });
     </script>
 </body>

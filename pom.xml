@@ -13,19 +13,6 @@
 	<version>0.0.1-SNAPSHOT</version>
 	<name>ScreenAI</name>
 	<description>ScreenAI - Real-time screen sharing application</description>
-	<url/>
-	<licenses>
-		<license/>
-	</licenses>
-	<developers>
-		<developer/>
-	</developers>
-	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
-	</scm>
 	<properties>
 		<java.version>17</java.version>
 	</properties>
@@ -48,18 +35,6 @@
 			<groupId>org.bytedeco</groupId>
 			<artifactId>javacv-platform</artifactId>
 			<version>1.5.9</version>
-		</dependency>
-		
-		<!-- Base64 encoding -->
-		<dependency>
-			<groupId>commons-codec</groupId>
-			<artifactId>commons-codec</artifactId>
-		</dependency>
-		
-		<!-- JSON processing -->
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-databind</artifactId>
 		</dependency>
 
 		<dependency>

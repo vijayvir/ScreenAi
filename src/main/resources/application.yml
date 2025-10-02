@@ -1,0 +1,43 @@
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on-param
+
+spring:
+  application:
+    name: ScreenAI
+  thymeleaf:
+    cache: false
+    mode: HTML
+  web:
+    resources:
+      cache:
+        period: 3600 # 1 hour cache for static resources
+
+# ScreenAI specific configuration
+screenai:
+  capture:
+    frame-rate: 10
+    max-consecutive-failures: 10
+    circuit-breaker-timeout: 30000
+  websocket:
+    max-connections: 50
+    max-session-duration: 3600000
+    cleanup-interval: 60000
+
+# Logging configuration
+logging:
+  level:
+    root: INFO
+    com.screenai: INFO
+    org.springframework.web.socket: WARN
+    org.bytedeco.javacv: WARN
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{50} - %msg%n"
+  file:
+    name: logs/screenai.log
+    max-size: 10MB
+    max-history: 5

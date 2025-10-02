@@ -26,7 +26,6 @@ import com.screenai.handler.ScreenShareWebSocketHandler;
 /**
  * Screen Capture Service using JavaCV  for real screen capture
  * Implements FFmpegFrameGrabber for platform-specific screen capture
- * No AWT Robot fallback - JavaCV only implementation
  */
 @Service
 public class ScreenCaptureService {
@@ -43,6 +42,13 @@ public class ScreenCaptureService {
     private boolean isInitialized = false;
     private boolean isCapturing = false;
     private Rectangle screenRect;
+    
+    // Circuit breaker pattern for failed captures
+    private int consecutiveFailures = 0;
+    private static final int MAX_CONSECUTIVE_FAILURES = 10;
+    private boolean circuitBreakerOpen = false;
+    private long circuitBreakerOpenTime = 0;
+    private static final long CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 seconds
 
     /**
      * Initializes JavaCV screen capture with platform-specific FFmpeg formats
@@ -171,7 +177,7 @@ public class ScreenCaptureService {
                 String frameData = captureScreenAsBase64();
                 if (frameData != null) {
                     webSocketHandler.broadcastScreenFrame(frameData);
-                    logger.debug("Screen frame broadcasted successfully (using JavaCV)");
+                    logger.info("Screen frame broadcasted successfully (frame size: {} chars)", frameData.length());
                 } else {
                     logger.warn("No screen frame data to broadcast");
                 }
@@ -195,26 +201,85 @@ public class ScreenCaptureService {
     }
     
     /**
-     * Captures the current screen and returns it as a Base64 encoded JPEG string
+     * Captures the current screen and returns it as a Base64 encoded JPEG string with circuit breaker
      * @return Base64 encoded JPEG image of the screen
      */
     public String captureScreenAsBase64() {
+        // Check circuit breaker
+        if (circuitBreakerOpen) {
+            if (System.currentTimeMillis() - circuitBreakerOpenTime > CIRCUIT_BREAKER_TIMEOUT) {
+                logger.info("Circuit breaker timeout expired, attempting to close circuit");
+                circuitBreakerOpen = false;
+                consecutiveFailures = 0;
+            } else {
+                logger.debug("Circuit breaker is open, skipping capture attempt");
+                return null;
+            }
+        }
+        
+        BufferedImage screenCapture = null;
+        ByteArrayOutputStream baos = null;
+        
         try {
-            BufferedImage screenCapture = captureScreen();
+            screenCapture = captureScreen();
             if (screenCapture == null) {
+                handleCaptureFailure();
                 return null;
             }
             
             // Convert to JPEG and encode as Base64
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ImageIO.write(screenCapture, "jpg", baos);
-            byte[] imageBytes = baos.toByteArray();
+            baos = new ByteArrayOutputStream();
+            if (!ImageIO.write(screenCapture, "jpg", baos)) {
+                logger.warn("Failed to write screenshot to output stream");
+                handleCaptureFailure();
+                return null;
+            }
             
-            return Base64.getEncoder().encodeToString(imageBytes);
+            byte[] imageBytes = baos.toByteArray();
+            String result = Base64.getEncoder().encodeToString(imageBytes);
+            
+            // Reset on success
+            consecutiveFailures = 0;
+            circuitBreakerOpen = false;
+            
+            return result;
             
         } catch (IOException e) {
-            logger.error("Failed to capture screen", e);
+            logger.error("IO error during screen capture: {}", e.getMessage());
+            handleCaptureFailure();
             return null;
+        } catch (OutOfMemoryError e) {
+            logger.error("Out of memory during screen capture - consider reducing quality");
+            handleCaptureFailure(); 
+            return null;
+        } catch (Exception e) {
+            logger.error("Unexpected error during screen capture: {}", e.getMessage(), e);
+            handleCaptureFailure();
+            return null;
+        } finally {
+            // Ensure resources are properly closed
+            if (baos != null) {
+                try {
+                    baos.close();
+                } catch (IOException e) {
+                    logger.debug("Error closing ByteArrayOutputStream: {}", e.getMessage());
+                }
+            }
+            
+            // Help GC with BufferedImage
+            if (screenCapture != null) {
+                screenCapture.flush();
+            }
+        }
+    }
+    
+    private void handleCaptureFailure() {
+        consecutiveFailures++;
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            logger.error("Too many consecutive failures ({}), opening circuit breaker for {} seconds", 
+                        consecutiveFailures, CIRCUIT_BREAKER_TIMEOUT / 1000);
+            circuitBreakerOpen = true;
+            circuitBreakerOpenTime = System.currentTimeMillis();
         }
     }
     

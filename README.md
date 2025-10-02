@@ -1,17 +1,17 @@
 
+# 🖥️ ScreenAI - Real-time Screen Sharing Application
 
-# ScreenAI
-
-A modern, cross-platform screen sharing application built with Java Spring Boot, WebSockets, and JavaCV. This application provides real-time server desktop streaming using WebSocket technology that can be viewed from any device on the same WiFi network.
+A lightweight, cross-platform screen sharing application built with Spring Boot and JavaCV. This application provides real-time server desktop streaming using WebSocket technology .
 
 ## Features
 
-- ✅ **Server-side screen capture** - Captures the server's desktop using JavaCV FFmpeg
-- ✅ **WebSocket streaming** - Real-time frame broadcasting at 10 FPS
+- ✅ **Real-time Screen Streaming** - Live screen capture via WebSocket
+- ✅ **Cross-platform Support** - Works on Windows, macOS, and Linux
+- ✅ **Simple Interface** - Clean, intuitive web-based viewer
+- ✅ **High Performance** - 10 FPS streaming with optimized frame delivery
+- ✅ **Zero Installation** - Browser-based viewer, no client software needed
 - ✅ **Cross-platform compatibility** - Works on Windows, macOS, and Linux  
 - ✅ **Multiple viewers** - Support for concurrent viewers
-- ✅ **JavaCV-only implementation** - Pure JavaCV
-- ✅ **REST API monitoring** - System status and control endpoints
 
 ## Technologies Used
 
