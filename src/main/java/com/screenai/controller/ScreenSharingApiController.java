@@ -74,6 +74,19 @@ public class ScreenSharingApiController {
                 status.put("viewerCount", 0);
             }
             
+            // Performance configuration information
+            try {
+                Map<String, Object> performance = new HashMap<>();
+                performance.put("frameRate", screenCaptureService.getFrameRate());
+                performance.put("jpegQuality", screenCaptureService.getJpegQuality());
+                performance.put("ultraFastMode", screenCaptureService.isUltraFastMode());
+                performance.put("zeroLatencyMode", screenCaptureService.isZeroLatencyMode());
+                status.put("performance", performance);
+            } catch (Exception e) {
+                logger.warn("Error getting performance configuration: {}", e.getMessage());
+                status.put("performance", null);
+            }
+
             // System information (should not fail, but just in case)
             status.put("serverTime", System.currentTimeMillis());
             status.put("osName", System.getProperty("os.name", "Unknown"));
