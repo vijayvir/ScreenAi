@@ -8,9 +8,10 @@ import org.springframework.web.bind.annotation.GetMapping;
  */
 @Controller
 public class WebController {
-    
+
     /**
      * Serves the main viewer page
+     * 
      * @return the name of the Thymeleaf template
      */
     @GetMapping("/")

@@ -12,6 +12,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.IIOImage;
+import javax.imageio.stream.ImageOutputStream;
+import java.util.Iterator;
 
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
@@ -19,9 +24,16 @@ import org.bytedeco.javacv.Java2DFrameConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.screenai.handler.ScreenShareWebSocketHandler;
+
+import javax.imageio.IIOImage;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+import java.util.Iterator;
 
 /**
  * Screen Capture Service using JavaCV  for real screen capture
@@ -31,7 +43,24 @@ import com.screenai.handler.ScreenShareWebSocketHandler;
 public class ScreenCaptureService {
 
     private static final Logger logger = LoggerFactory.getLogger(ScreenCaptureService.class);
-    private static final int FRAME_RATE = 10; // 10 FPS for balance between performance and smoothness
+    
+    @Value("${screenai.capture.fps:15}")
+    private int frameRate;
+    
+    @Value("${screenai.capture.jpeg.quality:70}")
+    private int jpegQuality;
+    
+    @Value("${screenai.capture.optimize.ultrafast:true}")
+    private boolean ultraFastMode;
+    
+    @Value("${screenai.capture.optimize.zerolatency:true}")
+    private boolean zeroLatencyMode;
+    
+    @Value("${screenai.capture.circuit-breaker.failure-threshold:10}")
+    private int failureThreshold;
+    
+    @Value("${screenai.capture.circuit-breaker.timeout:5000}")
+    private int circuitBreakerTimeout;
 
     @Autowired
     private ScreenShareWebSocketHandler webSocketHandler;
@@ -101,7 +130,7 @@ public class ScreenCaptureService {
                 frameGrabber.setFormat("gdigrab");
                 frameGrabber.setImageWidth(screenRect.width);
                 frameGrabber.setImageHeight(screenRect.height);
-                frameGrabber.setFrameRate(FRAME_RATE);
+                frameGrabber.setFrameRate(frameRate);
                 logger.info("Windows gdigrab screen capture configured");
                 
             } else if (osName.contains("mac")) {
@@ -110,7 +139,7 @@ public class ScreenCaptureService {
                     // First attempt: Use desktop capture
                     frameGrabber = new FFmpegFrameGrabber("Capture screen 0");
                     frameGrabber.setFormat("avfoundation");
-                    frameGrabber.setFrameRate(FRAME_RATE);
+                    frameGrabber.setFrameRate(frameRate);
                     logger.info("macOS avfoundation desktop capture configured");
                 } catch (Exception e1) {
                     logger.debug("Primary macOS capture failed: {}", e1.getMessage());
@@ -118,7 +147,7 @@ public class ScreenCaptureService {
                         // Second attempt: Use desktop index
                         frameGrabber = new FFmpegFrameGrabber("1:none");
                         frameGrabber.setFormat("avfoundation");
-                        frameGrabber.setFrameRate(FRAME_RATE);
+                        frameGrabber.setFrameRate(frameRate);
                         logger.info("macOS avfoundation index capture configured");
                     } catch (Exception e2) {
                         logger.debug("Secondary macOS capture failed: {}", e2.getMessage());
@@ -135,7 +164,7 @@ public class ScreenCaptureService {
                 frameGrabber.setFormat("x11grab");
                 frameGrabber.setImageWidth(screenRect.width);
                 frameGrabber.setImageHeight(screenRect.height);
-                frameGrabber.setFrameRate(FRAME_RATE);
+                frameGrabber.setFrameRate(frameRate);
                 logger.info("Linux x11grab screen capture configured for display: {}", display);
                 
             } else {
@@ -147,8 +176,12 @@ public class ScreenCaptureService {
             // Set common options if frameGrabber is available
             if (frameGrabber != null) {
                 try {
-                    frameGrabber.setOption("preset", "ultrafast");
-                    frameGrabber.setOption("tune", "zerolatency");
+                    if (ultraFastMode) {
+                        frameGrabber.setOption("preset", "ultrafast");
+                    }
+                    if (zeroLatencyMode) {
+                        frameGrabber.setOption("tune", "zerolatency");
+                    }
                 } catch (Exception optionError) {
                     logger.debug("Could not set FFmpeg options: {}", optionError.getMessage());
                 }
@@ -184,9 +217,9 @@ public class ScreenCaptureService {
             } catch (Exception e) {
                 logger.error("Error during screen capture broadcast", e);
             }
-        }, 0, 1000 / FRAME_RATE, TimeUnit.MILLISECONDS);
+        }, 0, 1000 / frameRate, TimeUnit.MILLISECONDS);
         
-        logger.info("Screen capture started at {} FPS (using JavaCV)", FRAME_RATE);
+        logger.info("Screen capture started at {} FPS (using JavaCV)", frameRate);
     }
     
     /**
@@ -227,10 +260,11 @@ public class ScreenCaptureService {
                 return null;
             }
             
-            // Convert to JPEG and encode as Base64
+            // Convert to JPEG with quality control and encode as Base64
             baos = new ByteArrayOutputStream();
-            if (!ImageIO.write(screenCapture, "jpg", baos)) {
-                logger.warn("Failed to write screenshot to output stream");
+            float qualityFloat = jpegQuality / 100.0f; // Convert percentage to float
+            if (!writeJPEGWithQuality(screenCapture, baos, qualityFloat)) {
+                logger.warn("Failed to write screenshot to output stream with quality {}", jpegQuality);
                 handleCaptureFailure();
                 return null;
             }
@@ -244,10 +278,6 @@ public class ScreenCaptureService {
             
             return result;
             
-        } catch (IOException e) {
-            logger.error("IO error during screen capture: {}", e.getMessage());
-            handleCaptureFailure();
-            return null;
         } catch (OutOfMemoryError e) {
             logger.error("Out of memory during screen capture - consider reducing quality");
             handleCaptureFailure(); 
@@ -396,6 +426,73 @@ public class ScreenCaptureService {
         return "JavaCV FFmpeg";
     }
     
+    /**
+     * Gets the current frame rate configuration
+     * @return The frame rate in FPS
+     */
+    public int getFrameRate() {
+        return frameRate;
+    }
+    
+    /**
+     * Gets the current JPEG quality configuration
+     * @return The JPEG quality percentage (30-100)
+     */
+    public int getJpegQuality() {
+        return jpegQuality;
+    }
+    
+    /**
+     * Gets the ultra fast mode configuration
+     * @return true if ultra fast mode is enabled
+     */
+    public boolean isUltraFastMode() {
+        return ultraFastMode;
+    }
+    
+    /**
+     * Gets the zero latency mode configuration
+     * @return true if zero latency mode is enabled
+     */
+    public boolean isZeroLatencyMode() {
+        return zeroLatencyMode;
+    }
+    
+    /**
+     * Writes a BufferedImage as JPEG with specified quality
+     * @param image The image to write
+     * @param outputStream The output stream to write to
+     * @param quality The JPEG quality (0.0 to 1.0)
+     * @return true if successful, false otherwise
+     */
+    private boolean writeJPEGWithQuality(BufferedImage image, ByteArrayOutputStream outputStream, float quality) {
+        try {
+            Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");
+            if (!writers.hasNext()) {
+                logger.warn("No JPEG writers available");
+                return false;
+            }
+            
+            ImageWriter writer = writers.next();
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            
+            if (param.canWriteCompressed()) {
+                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                param.setCompressionQuality(quality);
+            }
+            
+            try (ImageOutputStream ios = ImageIO.createImageOutputStream(outputStream)) {
+                writer.setOutput(ios);
+                writer.write(null, new javax.imageio.IIOImage(image, null, null), param);
+                writer.dispose();
+                return true;
+            }
+        } catch (IOException e) {
+            logger.error("Error writing JPEG with quality: {}", e.getMessage());
+            return false;
+        }
+    }
+
     /**
      * Cleanup resources when service is destroyed
      */
