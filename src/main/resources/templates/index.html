@@ -507,6 +507,17 @@
                this.stopTime = null;
                this.elapsedTimer = null;
                this.isStreaming = false;
+               
+               // 📡 Network latency tracking
+               this.latencyData = {
+                   current: -1,
+                   average: 0,
+                   min: Number.MAX_VALUE,
+                   max: 0,
+                   count: 0,
+                   history: []
+               };
+               this.pendingPings = new Map();
               
                // Timestamp elements
                this.streamControls = document.getElementById('streamControls');
@@ -867,6 +878,16 @@
                        this.frameCount++;
                        this.lastFrameTime = Date.now();
                        break;
+                   
+                   case 'ping':
+                       // Respond to server ping with pong
+                       this.handlePing(message);
+                       break;
+                       
+                   case 'pong':
+                       // Process pong response for latency calculation
+                       this.handlePong(message);
+                       break;
                       
                    default:
                        console.log('Unknown message type:', message.type);
@@ -907,6 +928,123 @@
                } else if (!this.intentionalStop) {
                    this.showError('Failed to reconnect after multiple attempts. Please try again.');
                }
+           }
+           
+           // ==================== NETWORK LATENCY METHODS ====================
+           
+           /**
+            * Handle ping message from server - respond with pong
+            */
+           handlePing(message) {
+               try {
+                   const pongMessage = {
+                       type: 'pong',
+                       timestamp: message.timestamp
+                   };
+                   
+                   this.socket.send(JSON.stringify(pongMessage));
+                   console.log('📡 Responded to server ping');
+                   
+               } catch (error) {
+                   console.error('Error responding to ping:', error);
+               }
+           }
+           
+           /**
+            * Handle pong response from server - calculate latency
+            */
+           handlePong(message) {
+               try {
+                   const sendTime = this.pendingPings.get(message.timestamp);
+                   if (sendTime) {
+                       const latency = Date.now() - sendTime;
+                       this.updateLatencyData(latency);
+                       this.pendingPings.delete(message.timestamp);
+                       
+                       console.log(`📡 Network latency: ${latency}ms (avg: ${this.latencyData.average.toFixed(1)}ms)`);
+                   }
+               } catch (error) {
+                   console.error('Error processing pong:', error);
+               }
+           }
+           
+           /**
+            * Send ping to server to measure latency
+            */
+           sendPing() {
+               try {
+                   const timestamp = Date.now();
+                   const pingMessage = {
+                       type: 'ping',
+                       timestamp: timestamp
+                   };
+                   
+                   this.pendingPings.set(timestamp, timestamp);
+                   this.socket.send(JSON.stringify(pingMessage));
+                   
+                   // Clean up old pending pings (older than 10 seconds)
+                   const cutoff = timestamp - 10000;
+                   for (const [key, value] of this.pendingPings.entries()) {
+                       if (value < cutoff) {
+                           this.pendingPings.delete(key);
+                       }
+                   }
+                   
+               } catch (error) {
+                   console.error('Error sending ping:', error);
+               }
+           }
+           
+           /**
+            * Update latency statistics
+            */
+           updateLatencyData(latency) {
+               this.latencyData.current = latency;
+               this.latencyData.count++;
+               
+               // Update min/max
+               this.latencyData.min = Math.min(this.latencyData.min, latency);
+               this.latencyData.max = Math.max(this.latencyData.max, latency);
+               
+               // Update rolling average
+               this.latencyData.average = ((this.latencyData.average * (this.latencyData.count - 1)) + latency) / this.latencyData.count;
+               
+               // Store in history (keep last 50 measurements)
+               this.latencyData.history.push({
+                   timestamp: Date.now(),
+                   latency: latency
+               });
+               
+               if (this.latencyData.history.length > 50) {
+                   this.latencyData.history.shift();
+               }
+           }
+           
+           /**
+            * Get network quality classification based on latency
+            */
+           getNetworkQuality() {
+               const avgLatency = this.latencyData.average;
+               
+               if (avgLatency < 30) return { level: 'excellent', color: '#4CAF50', text: 'Excellent' };
+               if (avgLatency < 80) return { level: 'good', color: '#8BC34A', text: 'Good' };
+               if (avgLatency < 200) return { level: 'fair', color: '#FF9800', text: 'Fair' };
+               if (avgLatency < 500) return { level: 'poor', color: '#FF5722', text: 'Poor' };
+               return { level: 'critical', color: '#F44336', text: 'Critical' };
+           }
+           
+           /**
+            * Get latency statistics
+            */
+           getLatencyStats() {
+               return {
+                   current: this.latencyData.current,
+                   average: Math.round(this.latencyData.average * 10) / 10,
+                   min: this.latencyData.min === Number.MAX_VALUE ? 0 : this.latencyData.min,
+                   max: this.latencyData.max,
+                   count: this.latencyData.count,
+                   quality: this.getNetworkQuality()
+               };
            }
        }
       
