@@ -16,17 +16,6 @@ spring:
       cache:
         period: 3600 # 1 hour cache for static resources
 
-# ScreenAI specific configuration
-screenai:
-  capture:
-    frame-rate: 10
-    max-consecutive-failures: 10
-    circuit-breaker-timeout: 30000
-  websocket:
-    max-connections: 50
-    max-session-duration: 3600000
-    cleanup-interval: 60000
-
 # Logging configuration
 logging:
   level:

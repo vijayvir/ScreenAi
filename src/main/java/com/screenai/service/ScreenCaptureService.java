@@ -6,27 +6,30 @@ import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Base64;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
-import javax.imageio.IIOImage;
 import javax.imageio.stream.ImageOutputStream;
-import java.util.Iterator;
 
+import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
+import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
-import org.bytedeco.javacv.Java2DFrameConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.screenai.encoder.VideoEncoderFactory;
+import com.screenai.encoder.VideoEncoderStrategy;
 import com.screenai.handler.ScreenShareWebSocketHandler;
 
 import javax.imageio.IIOImage;
@@ -36,48 +39,55 @@ import javax.imageio.stream.ImageOutputStream;
 import java.util.Iterator;
 
 /**
- * Screen Capture Service using JavaCV  for real screen capture
- * Implements FFmpegFrameGrabber for platform-specific screen capture
+ * Service for capturing the screen using JavaCV and streaming via WebSockets
  */
 @Service
 public class ScreenCaptureService {
 
     private static final Logger logger = LoggerFactory.getLogger(ScreenCaptureService.class);
     
-    @Value("${screenai.capture.fps:15}")
-    private int frameRate;
-    
-    @Value("${screenai.capture.jpeg.quality:70}")
-    private int jpegQuality;
-    
-    @Value("${screenai.capture.optimize.ultrafast:true}")
-    private boolean ultraFastMode;
-    
-    @Value("${screenai.capture.optimize.zerolatency:true}")
-    private boolean zeroLatencyMode;
-    
-    @Value("${screenai.capture.circuit-breaker.failure-threshold:10}")
-    private int failureThreshold;
-    
-    @Value("${screenai.capture.circuit-breaker.timeout:5000}")
-    private int circuitBreakerTimeout;
+
+    private VideoEncoderStrategy currentEncoder;
+    private int consecutiveFrameSkips = 0;
+    private long lastFrameTime = 0;
+    private static final int FRAME_RATE = 15; // 15 FPS for optimal balance
+
 
     @Autowired
     private ScreenShareWebSocketHandler webSocketHandler;
+    
+    @Autowired
+    private PerformanceMonitorService performanceMonitor;
+
+    // Configuration parameters
+    @Value("${screen.capture.frame-rate:15}")
+    private int frameRate = 15;
+    
+    @Value("${screen.capture.jpeg-quality:80}")
+    private int jpegQuality = 80;
+    
+    @Value("${screen.capture.ultra-fast:true}")
+    private boolean ultraFastMode = true;
+    
+    @Value("${screen.capture.zero-latency:true}")
+    private boolean zeroLatencyMode = true;
 
     private FFmpegFrameGrabber frameGrabber;
-    private Java2DFrameConverter converter;
+    private FFmpegFrameRecorder recorder;
     private ScheduledExecutorService scheduler;
     private boolean isInitialized = false;
     private boolean isCapturing = false;
     private Rectangle screenRect;
+
+    // Recorder state
+    private volatile boolean recorderStarted = false;
+
+    // ✅ Init segment caching for new viewers
+    private byte[] initSegment = null;
     
-    // Circuit breaker pattern for failed captures
-    private int consecutiveFailures = 0;
-    private static final int MAX_CONSECUTIVE_FAILURES = 10;
-    private boolean circuitBreakerOpen = false;
-    private long circuitBreakerOpenTime = 0;
-    private static final long CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 seconds
+    // ✅ Stream management
+    private ByteArrayOutputStream videoStream;
+    private volatile int lastSentPosition = 0;
 
     /**
      * Initializes JavaCV screen capture with platform-specific FFmpeg formats
@@ -88,41 +98,33 @@ public class ScreenCaptureService {
             GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
             GraphicsDevice gd = ge.getDefaultScreenDevice();
             screenRect = gd.getDefaultConfiguration().getBounds();
-            
+
             logger.info("Detected screen resolution: {}x{}", screenRect.width, screenRect.height);
-            
-            // Initialize JavaCV Frame Converter
-            converter = new Java2DFrameConverter();
-            
-            // Initialize JavaCV screen capture
+
+            // Configure grabber only (do not start recorder yet)
             initializePlatformScreenCapture();
-            
+
             if (frameGrabber != null) {
-                try {
-                    frameGrabber.start();
-                    isInitialized = true;
-                    logger.info("JavaCV FFmpegFrameGrabber initialized successfully for screen capture");
-                } catch (Exception e) {
-                    logger.error("JavaCV screen capture failed to start: {}", e.getMessage());
-                    throw new RuntimeException("Failed to initialize JavaCV screen capture", e);
-                }
+                frameGrabber.start();
+                isInitialized = true;
+                logger.info("JavaCV FFmpegFrameGrabber initialized successfully for screen capture");
             } else {
                 throw new RuntimeException("JavaCV screen capture not available for this platform");
             }
-            
+
         } catch (Exception e) {
             logger.error("Failed to initialize JavaCV screen capture", e);
             throw new RuntimeException("Screen capture initialization failed", e);
         }
     }
-    
+
     /**
      * Initializes platform-specific screen capture using FFmpeg
      */
     private void initializePlatformScreenCapture() {
         String osName = System.getProperty("os.name").toLowerCase();
         logger.info("Initializing JavaCV screen capture for OS: {}", osName);
-        
+
         try {
             if (osName.contains("windows")) {
                 // Windows: Use gdigrab
@@ -132,47 +134,66 @@ public class ScreenCaptureService {
                 frameGrabber.setImageHeight(screenRect.height);
                 frameGrabber.setFrameRate(frameRate);
                 logger.info("Windows gdigrab screen capture configured");
-                
+
             } else if (osName.contains("mac")) {
-                // macOS: Try multiple approaches
+                // macOS: Try modern labeled device first, then numeric fallbacks
+                Exception firstError = null;
                 try {
-                    // First attempt: Use desktop capture
                     frameGrabber = new FFmpegFrameGrabber("Capture screen 0");
                     frameGrabber.setFormat("avfoundation");
-                    frameGrabber.setFrameRate(frameRate);
-                    logger.info("macOS avfoundation desktop capture configured");
-                } catch (Exception e1) {
-                    logger.debug("Primary macOS capture failed: {}", e1.getMessage());
+
+                    frameGrabber.setImageWidth(screenRect.width);
+                    frameGrabber.setImageHeight(screenRect.height);
+                    frameGrabber.setFrameRate(FRAME_RATE);
+                    logger.info("macOS avfoundation screen capture configured with 'Capture screen 0'");
+                } catch (Exception e0) {
+                    firstError = e0;
+                    logger.debug("Primary macOS 'Capture screen 0' failed: {}", e0.getMessage());
+
                     try {
-                        // Second attempt: Use desktop index
-                        frameGrabber = new FFmpegFrameGrabber("1:none");
+                        frameGrabber = new FFmpegFrameGrabber("0:none");
                         frameGrabber.setFormat("avfoundation");
-                        frameGrabber.setFrameRate(frameRate);
-                        logger.info("macOS avfoundation index capture configured");
-                    } catch (Exception e2) {
-                        logger.debug("Secondary macOS capture failed: {}", e2.getMessage());
-                        frameGrabber = null;
+
+                        frameGrabber.setImageWidth(screenRect.width);
+                        frameGrabber.setImageHeight(screenRect.height);
+                        frameGrabber.setFrameRate(FRAME_RATE);
+                        logger.info("macOS avfoundation screen capture configured with '0:none'");
+                    } catch (Exception e1) {
+                        logger.debug("Secondary macOS '0:none' failed: {}", e1.getMessage());
+                        try {
+                            frameGrabber = new FFmpegFrameGrabber("1:none");
+                            frameGrabber.setFormat("avfoundation");
+                            frameGrabber.setImageWidth(screenRect.width);
+                            frameGrabber.setImageHeight(screenRect.height);
+                            frameGrabber.setFrameRate(FRAME_RATE);
+                            logger.info("macOS avfoundation screen capture configured with '1:none'");
+                        } catch (Exception e2) {
+                            logger.warn("All macOS avfoundation configs failed: primary={}, secondary={}, tertiary={}",
+                                    firstError != null ? firstError.getMessage() : "none", e1.getMessage(), e2.getMessage());
+                            frameGrabber = null;
+                        }
+
                     }
                 }
-                
+
             } else if (osName.contains("linux")) {
                 // Linux: Use x11grab
                 String display = System.getenv("DISPLAY");
                 if (display == null) display = ":0.0";
-                
+
                 frameGrabber = new FFmpegFrameGrabber(display);
                 frameGrabber.setFormat("x11grab");
                 frameGrabber.setImageWidth(screenRect.width);
                 frameGrabber.setImageHeight(screenRect.height);
                 frameGrabber.setFrameRate(frameRate);
                 logger.info("Linux x11grab screen capture configured for display: {}", display);
-                
+
             } else {
                 logger.warn("Unsupported operating system for JavaCV screen capture: {}", osName);
                 frameGrabber = null;
                 return;
             }
-            
+
             // Set common options if frameGrabber is available
             if (frameGrabber != null) {
                 try {
@@ -186,219 +207,224 @@ public class ScreenCaptureService {
                     logger.debug("Could not set FFmpeg options: {}", optionError.getMessage());
                 }
             }
-            
+
         } catch (Exception e) {
             logger.warn("Failed to configure JavaCV screen capture: {}", e.getMessage());
             frameGrabber = null;
         }
     }
-    
+
     /**
-     * Starts continuous screen capture and broadcasting
+     * ✅ Initialize H.264 encoder with init segment extraction
+     */
+    private boolean initializeVideoRecorder() {
+        try {
+            // Use ByteArrayOutputStream instead of pipes
+            videoStream = new ByteArrayOutputStream();
+            lastSentPosition = 0;
+            initSegment = null;
+            recorderStarted = false;
+
+            int targetWidth = screenRect.width;
+            int targetHeight = screenRect.height;
+            
+            recorder = new FFmpegFrameRecorder(videoStream, targetWidth, targetHeight);
+            
+            // ✅ Use encoder factory to get best available encoder (GPU-accelerated when possible)
+            currentEncoder = VideoEncoderFactory.getBestEncoder();
+            currentEncoder.configure(recorder);
+            String codecName = currentEncoder.getCodecName();
+            
+            logger.info("✅ Selected encoder: {} (Hardware: {}, CPU reduction: {}%)", 
+                       currentEncoder.getEncoderType(),
+                       currentEncoder.isHardwareAccelerated(),
+                       (int)(currentEncoder.getCpuReduction() * 100));
+            
+            recorder.setFormat("mp4");
+            recorder.setFrameRate(FRAME_RATE);
+            recorder.setPixelFormat(AV_PIX_FMT_YUV420P);
+            recorder.setVideoBitrate(2000000);
+            recorder.setGopSize(FRAME_RATE);
+
+            // ✅ fMP4 container options for MediaSource
+            recorder.setOption("movflags", "frag_keyframe+empty_moov+default_base_moof");
+            recorder.setOption("flush_packets", "1");
+            recorder.setOption("min_frag_duration", "66666"); // ~1 frame at 15fps
+
+            recorder.start();
+            recorderStarted = true;
+            
+            logger.info("✅ H.264 fMP4 encoder started: {}x{} @ {}fps ({})", 
+                       targetWidth, targetHeight, FRAME_RATE, codecName);
+            
+            // ✅ Wait for init segment to be written
+            Thread.sleep(200);
+            
+            // ✅ Extract and cache init segment (ftyp + moov boxes)
+            extractInitSegment();
+            
+            return true;
+            
+        } catch (Exception e) {
+            logger.error("❌ Failed to initialize H.264 recorder: {}", e.getMessage(), e);
+            recorderStarted = false;
+            return false;
+        }
+    }
+
+    /**
+     * ✅ SIMPLIFIED: Start capture with incremental ByteArrayOutputStream sending
      */
     public void startCapture() {
         if (!isInitialized || isCapturing) {
             logger.warn("Cannot start capture - not initialized or already capturing");
             return;
         }
-        
+
+        if (!initializeVideoRecorder()) {
+            logger.error("Recorder could not be started");
+            return;
+        }
+
         isCapturing = true;
+        
+        // ✅ Start performance monitoring with encoder type
+        String encoderType = currentEncoder != null ? currentEncoder.getEncoderType() : "Unknown";
+        performanceMonitor.startMonitoring(encoderType);
+        logger.info("📊 Performance monitoring started");
+        
         scheduler = Executors.newScheduledThreadPool(1);
+
+        final long frameIntervalMs = 1000 / FRAME_RATE;
         
         scheduler.scheduleAtFixedRate(() -> {
             try {
-                String frameData = captureScreenAsBase64();
-                if (frameData != null) {
-                    webSocketHandler.broadcastScreenFrame(frameData);
-                    logger.info("Screen frame broadcasted successfully (frame size: {} chars)", frameData.length());
+                long captureStartTime = System.currentTimeMillis();
+                
+                // Grab frame
+                Frame frame = frameGrabber.grabImage();
+                if (frame != null && frame.image != null) {
+                    // ✅ Record successful frame capture
+                    performanceMonitor.recordFrameCapture();
+                    
+                    // Set timestamp for smooth playback
+                    if (frame.timestamp > 0) {
+                        try { 
+                            recorder.setTimestamp(frame.timestamp); 
+                        } catch (Exception ignore) {}
+                    }
+                    
+                    // ✅ Record frame to ByteArrayOutputStream
+                    recorder.record(frame);
+                    
+                    // ✅ Send only NEW bytes written since last send
+                    sendIncrementalData();
+                    
+                    // ✅ Calculate and record latency
+                    long latency = System.currentTimeMillis() - captureStartTime;
+                    performanceMonitor.recordLatency(latency);
+                    
+                    // Reset consecutive frame skip counter
+                    consecutiveFrameSkips = 0;
+                    lastFrameTime = System.currentTimeMillis();
                 } else {
-                    logger.warn("No screen frame data to broadcast");
+                    // ✅ Track dropped frames
+                    consecutiveFrameSkips++;
+                    performanceMonitor.recordDroppedFrame();
+                    
+                    if (consecutiveFrameSkips > 5) {
+                        logger.warn("⚠️ {} consecutive frames dropped", consecutiveFrameSkips);
+                    }
                 }
             } catch (Exception e) {
-                logger.error("Error during screen capture broadcast", e);
+                logger.error("Error during screen capture: {}", e.getMessage());
+                performanceMonitor.recordDroppedFrame();
             }
-        }, 0, 1000 / frameRate, TimeUnit.MILLISECONDS);
-        
-        logger.info("Screen capture started at {} FPS (using JavaCV)", frameRate);
+
+        }, 0, frameIntervalMs, TimeUnit.MILLISECONDS);
+
+        logger.info("🎬 H.264 streaming started at {} FPS", FRAME_RATE);
+
     }
-    
+
     /**
-     * Stops continuous screen capture
+     * ✅ Send only NEW media fragments (moof + mdat boxes)
      */
-    public void stopCapture() {
-        if (scheduler != null && !scheduler.isShutdown()) {
-            scheduler.shutdown();
-            isCapturing = false;
-            logger.info("Screen capture stopped");
-        }
-    }
-    
-    /**
-     * Captures the current screen and returns it as a Base64 encoded JPEG string with circuit breaker
-     * @return Base64 encoded JPEG image of the screen
-     */
-    public String captureScreenAsBase64() {
-        // Check circuit breaker
-        if (circuitBreakerOpen) {
-            if (System.currentTimeMillis() - circuitBreakerOpenTime > CIRCUIT_BREAKER_TIMEOUT) {
-                logger.info("Circuit breaker timeout expired, attempting to close circuit");
-                circuitBreakerOpen = false;
-                consecutiveFailures = 0;
-            } else {
-                logger.debug("Circuit breaker is open, skipping capture attempt");
-                return null;
-            }
-        }
-        
-        BufferedImage screenCapture = null;
-        ByteArrayOutputStream baos = null;
-        
+    private void sendIncrementalData() {
         try {
-            screenCapture = captureScreen();
-            if (screenCapture == null) {
-                handleCaptureFailure();
-                return null;
-            }
+            byte[] fullBuffer = videoStream.toByteArray();
+            int currentSize = fullBuffer.length;
             
-            // Convert to JPEG with quality control and encode as Base64
-            baos = new ByteArrayOutputStream();
-            float qualityFloat = jpegQuality / 100.0f; // Convert percentage to float
-            if (!writeJPEGWithQuality(screenCapture, baos, qualityFloat)) {
-                logger.warn("Failed to write screenshot to output stream with quality {}", jpegQuality);
-                handleCaptureFailure();
-                return null;
-            }
-            
-            byte[] imageBytes = baos.toByteArray();
-            String result = Base64.getEncoder().encodeToString(imageBytes);
-            
-            // Reset on success
-            consecutiveFailures = 0;
-            circuitBreakerOpen = false;
-            
-            return result;
-            
-        } catch (OutOfMemoryError e) {
-            logger.error("Out of memory during screen capture - consider reducing quality");
-            handleCaptureFailure(); 
-            return null;
-        } catch (Exception e) {
-            logger.error("Unexpected error during screen capture: {}", e.getMessage(), e);
-            handleCaptureFailure();
-            return null;
-        } finally {
-            // Ensure resources are properly closed
-            if (baos != null) {
-                try {
-                    baos.close();
-                } catch (IOException e) {
-                    logger.debug("Error closing ByteArrayOutputStream: {}", e.getMessage());
+            // Only send if there's new data
+            if (currentSize > lastSentPosition) {
+                byte[] newData = Arrays.copyOfRange(fullBuffer, lastSentPosition, currentSize);
+                
+                if (newData.length > 0 && containsMediaFragment(newData)) {
+                    String boxInfo = detectBoxType(newData);
+                    logger.debug("📤 Sending {} bytes to {} viewers ({})", 
+                                newData.length, webSocketHandler.getSessionCount(), boxInfo);
+                    
+                    webSocketHandler.broadcastVideoBinary(newData);
+                    lastSentPosition = currentSize;
                 }
             }
-            
-            // Help GC with BufferedImage
-            if (screenCapture != null) {
-                screenCapture.flush();
+        } catch (Exception e) {
+            logger.error("❌ Error sending incremental data: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * ✅ SIMPLIFIED: Stop capture without pipe cleanup
+     */
+    public void stopCapture() {
+        logger.info("🛑 Stopping screen capture...");
+        
+        // ✅ Stop performance monitoring
+        performanceMonitor.stopMonitoring();
+        logger.info("📊 Performance monitoring stopped");
+        
+        // Stop scheduler
+        if (scheduler != null && !scheduler.isShutdown()) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(2, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                scheduler.shutdownNow();
+                Thread.currentThread().interrupt();
             }
         }
-    }
-    
-    private void handleCaptureFailure() {
-        consecutiveFailures++;
-        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-            logger.error("Too many consecutive failures ({}), opening circuit breaker for {} seconds", 
-                        consecutiveFailures, CIRCUIT_BREAKER_TIMEOUT / 1000);
-            circuitBreakerOpen = true;
-            circuitBreakerOpenTime = System.currentTimeMillis();
-        }
-    }
-    
-    /**
-     * Captures the current screen as a BufferedImage
-     * @return BufferedImage of the current screen
-     */
-    public BufferedImage captureScreen() {
-        if (!isInitialized) {
-            logger.debug("Screen capture not initialized");
-            return null;
-        }
         
-        return captureScreenWithJavaCV();
-    }
-    
-    /**
-     * Captures screen using JavaCV FFmpegFrameGrabber
-     */
-    private BufferedImage captureScreenWithJavaCV() {
-        if (frameGrabber == null) {
-            logger.debug("JavaCV frame grabber not available");
-            return null;
-        }
-        
-        try {
-            // Capture frame using JavaCV FFmpegFrameGrabber
-            Frame frame = frameGrabber.grab();
-            if (frame != null && frame.image != null) {
-                // Convert JavaCV Frame to BufferedImage
-                BufferedImage bufferedImage = converter.convert(frame);
-                logger.debug("JavaCV screen captured: {}x{}", bufferedImage.getWidth(), bufferedImage.getHeight());
-                return bufferedImage;
-            } else {
-                logger.debug("No frame captured from JavaCV");
-                return null;
+        // Stop and release recorder
+        if (recorder != null && recorderStarted) {
+            try {
+                logger.info("🔄 Flushing and stopping recorder...");
+                recorder.stop();
+                recorder.release();
+                recorderStarted = false;
+            } catch (Exception e) {
+                logger.warn("⚠️ Error stopping recorder: {}", e.getMessage());
             }
-            
-        } catch (Exception e) {
-            logger.error("JavaCV screen capture failed: {}", e.getMessage());
-            return null;
-        }
-    }
-    
-    /**
-     * Captures screen as JavaCV Frame for advanced processing
-     * @return org.bytedeco.javacv.Frame object
-     */
-    public Frame captureScreenAsFrame() {
-        if (!isInitialized) {
-            return null;
+            recorder = null;
         }
         
-        return captureFrameWithJavaCV();
-    }
-    
-    /**
-     * Captures frame directly with JavaCV
-     */
-    private Frame captureFrameWithJavaCV() {
-        if (frameGrabber == null) {
-            return null;
+        // ✅ Clean up ByteArrayOutputStream
+        if (videoStream != null) {
+            try {
+                videoStream.close();
+            } catch (IOException e) {
+                logger.debug("Error closing video stream: {}", e.getMessage());
+            }
+            videoStream = null;
         }
         
-        try {
-            Frame frame = frameGrabber.grab();
-            return frame;
-        } catch (Exception e) {
-            logger.error("JavaCV frame capture failed: {}", e.getMessage());
-            return null;
-        }
+        lastSentPosition = 0;
+        isCapturing = false;
+        
+        logger.info("✅ Screen capture stopped cleanly");
     }
-    
-    /**
-     * Gets the screen dimensions
-     * @return Rectangle representing screen bounds
-     */
-    public Rectangle getScreenBounds() {
-        return screenRect;
-    }
-    
-    /**
-     * Gets the JavaCV frame converter
-     * @return Java2DFrameConverter instance
-     */
-    public Java2DFrameConverter getConverter() {
-        return converter;
-    }
-    
+
     /**
      * Checks if screen capture is properly initialized
      * @return true if screen capture is working
@@ -406,7 +432,7 @@ public class ScreenCaptureService {
     public boolean isInitialized() {
         return isInitialized;
     }
-    
+
     /**
      * Checks if screen capture is currently running
      * @return true if actively capturing and broadcasting
@@ -414,7 +440,14 @@ public class ScreenCaptureService {
     public boolean isCapturing() {
         return isCapturing;
     }
-    
+
+    /**
+     * Get cached init segment for late-joining viewers
+     */
+    public byte[] getInitSegment() {
+        return initSegment;
+    }
+
     /**
      * Gets the current capture method being used
      * @return String describing the capture method
@@ -425,7 +458,7 @@ public class ScreenCaptureService {
         }
         return "JavaCV FFmpeg";
     }
-    
+
     /**
      * Gets the current frame rate configuration
      * @return The frame rate in FPS
@@ -498,7 +531,7 @@ public class ScreenCaptureService {
      */
     public void cleanup() {
         stopCapture();
-        
+
         if (frameGrabber != null) {
             try {
                 frameGrabber.stop();
@@ -508,7 +541,120 @@ public class ScreenCaptureService {
                 logger.warn("Error during JavaCV cleanup: {}", e.getMessage());
             }
         }
-        
+
         logger.info("Screen capture service cleaned up");
+    }
+    
+    /**
+     * Detects MP4 box types for debugging
+     */
+    private String detectBoxType(byte[] data) {
+        if (data.length < 8) return "unknown";
+        
+        StringBuilder boxes = new StringBuilder();
+        int offset = 0;
+        
+        while (offset + 8 <= data.length) {
+            int size = ((data[offset] & 0xFF) << 24) | 
+                       ((data[offset+1] & 0xFF) << 16) |
+                       ((data[offset+2] & 0xFF) << 8) | 
+                       (data[offset+3] & 0xFF);
+            
+            if (size < 8 || size > data.length - offset) break;
+            
+            String type = new String(new byte[]{data[offset+4], data[offset+5], 
+                                                data[offset+6], data[offset+7]});
+            
+            if (boxes.length() > 0) boxes.append(", ");
+            boxes.append(type).append("(").append(size).append(")");
+            
+            offset += size;
+        }
+        
+        return boxes.length() > 0 ? boxes.toString() : "unknown";
+    }
+
+    /**
+     * ✅ Extract and cache init segment (ftyp + moov)
+     */
+    private void extractInitSegment() {
+        try {
+            byte[] data = videoStream.toByteArray();
+            if (data.length > 0) {
+                int moovEnd = findBoxEnd(data, "moov");
+                if (moovEnd > 0) {
+                    initSegment = Arrays.copyOfRange(data, 0, moovEnd);
+                    lastSentPosition = moovEnd;
+                    logger.info("✅ Init segment cached: {} bytes (boxes: {})", 
+                               initSegment.length, detectBoxType(initSegment));
+                } else {
+                    logger.warn("⚠️ moov box not found in init data");
+                }
+            }
+        } catch (Exception e) {
+            logger.error("❌ Failed to extract init segment: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Find end position of MP4 box
+     */
+    private int findBoxEnd(byte[] data, String boxType) {
+        int offset = 0;
+        while (offset + 8 <= data.length) {
+            int size = ((data[offset] & 0xFF) << 24) | 
+                       ((data[offset+1] & 0xFF) << 16) |
+                       ((data[offset+2] & 0xFF) << 8) | 
+                       (data[offset+3] & 0xFF);
+            
+            if (size < 8 || offset + size > data.length) break;
+            
+            String type = new String(new byte[]{data[offset+4], data[offset+5], 
+                                                data[offset+6], data[offset+7]});
+            
+            if (type.equals(boxType)) {
+                return offset + size;
+            }
+            
+            offset += size;
+        }
+        return -1;
+    }
+
+    /**
+     * Find box position
+     */
+    private int findBox(byte[] data, String boxType) {
+        int offset = 0;
+        while (offset + 8 <= data.length) {
+            int size = ((data[offset] & 0xFF) << 24) | 
+                       ((data[offset+1] & 0xFF) << 16) |
+                       ((data[offset+2] & 0xFF) << 8) | 
+                       (data[offset+3] & 0xFF);
+            
+            if (size < 8 || offset + size > data.length) break;
+            
+            String type = new String(new byte[]{data[offset+4], data[offset+5], 
+                                                data[offset+6], data[offset+7]});
+            
+            if (type.equals(boxType)) return offset;
+            
+            offset += size;
+        }
+        return -1;
+    }
+
+    /**
+     * Check if data contains media fragment (moof/mdat)
+     */
+    private boolean containsMediaFragment(byte[] data) {
+        return findBox(data, "moof") >= 0 || findBox(data, "mdat") >= 0;
+    }
+
+    /**
+     * Get screen dimensions
+     */
+    public Rectangle getScreenBounds() {
+        return screenRect;
     }
 }
