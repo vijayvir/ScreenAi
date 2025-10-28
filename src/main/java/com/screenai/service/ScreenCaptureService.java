@@ -3,20 +3,13 @@ package com.screenai.service;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
-import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
-import javax.imageio.stream.ImageOutputStream;
 
 import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
@@ -32,7 +25,6 @@ import com.screenai.encoder.VideoEncoderFactory;
 import com.screenai.encoder.VideoEncoderStrategy;
 import com.screenai.handler.ScreenShareWebSocketHandler;
 
-import javax.imageio.IIOImage;
 import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;

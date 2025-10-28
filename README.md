@@ -156,7 +156,6 @@ cd ScreenAi
 ### **REST API**
 ```http
 GET  /                            # Main viewer interface
-GET  /api/status                 # Get streaming status and viewer count
 GET  /api/performance/metrics    # Get current performance metrics
 GET  /api/performance/stats      # Get aggregated performance statistics
 GET  /api/performance/status     # Get monitoring status
