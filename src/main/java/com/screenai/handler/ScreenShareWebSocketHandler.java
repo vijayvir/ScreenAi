@@ -4,6 +4,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.lang.NonNull;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -24,15 +25,9 @@ public class ScreenShareWebSocketHandler implements WebSocketHandler {
     private static final long MAX_SESSION_DURATION = 3600000; // 1 hour
     
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+    public void afterConnectionEstablished(@NonNull WebSocketSession session) throws Exception {
         try {
             String clientIP = getClientIP(session);
-            
-            // Validate session
-            if (session == null) {
-                logger.error("Null session in afterConnectionEstablished");
-                return;
-            }
             
             // Check connection limits
             if (sessions.size() >= MAX_CONNECTIONS) {
@@ -56,7 +51,9 @@ public class ScreenShareWebSocketHandler implements WebSocketHandler {
         } catch (Exception e) {
             logger.error("Error establishing WebSocket connection", e);
             try {
-                session.close(CloseStatus.SERVER_ERROR);
+                if (session.isOpen()) {
+                    session.close(CloseStatus.SERVER_ERROR);
+                }
             } catch (Exception closeError) {
                 logger.debug("Error closing session after connection error: {}", closeError.getMessage());
             }
@@ -75,27 +72,27 @@ public class ScreenShareWebSocketHandler implements WebSocketHandler {
                 return xRealIP;
             }
             
-            return session.getRemoteAddress() != null ? 
-                   session.getRemoteAddress().toString() : "Unknown";
+            var remoteAddress = session.getRemoteAddress();
+            return remoteAddress != null ? remoteAddress.toString() : "Unknown";
         } catch (Exception e) {
             return "Unknown";
         }
     }
     
     @Override
-    public void handleMessage(WebSocketSession session, WebSocketMessage<?> message) throws Exception {
+    public void handleMessage(@NonNull WebSocketSession session, @NonNull WebSocketMessage<?> message) throws Exception {
         // Handle any client messages if needed (e.g., viewer feedback)
         logger.debug("Received message from viewer {}: {}", session.getId(), message.getPayload());
     }
     
     @Override
-    public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
+    public void handleTransportError(@NonNull WebSocketSession session, @NonNull Throwable exception) throws Exception {
         logger.error("Transport error for session {}: {}", session.getId(), exception.getMessage());
         sessions.remove(session);
     }
     
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus closeStatus) throws Exception {
+    public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus closeStatus) throws Exception {
         sessions.remove(session);
         logger.info("Screen viewer disconnected: {} (Remaining viewers: {})", session.getId(), sessions.size());
     }
@@ -164,7 +161,9 @@ public class ScreenShareWebSocketHandler implements WebSocketHandler {
                     logger.info("Closing stale session: {} (duration: {} minutes)", 
                                session.getId(), (currentTime - connectTime) / 60000);
                     try {
-                        session.close(CloseStatus.GOING_AWAY.withReason("Session timeout"));
+                        if (session.isOpen()) {
+                            session.close(CloseStatus.GOING_AWAY.withReason("Session timeout"));
+                        }
                     } catch (Exception e) {
                         logger.debug("Error closing stale session: {}", e.getMessage());
                     }
