@@ -10,7 +10,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-
 import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
@@ -25,6 +24,8 @@ import com.screenai.encoder.VideoEncoderFactory;
 import com.screenai.encoder.VideoEncoderStrategy;
 import com.screenai.handler.ScreenShareWebSocketHandler;
 
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
@@ -37,30 +38,28 @@ import java.util.Iterator;
 public class ScreenCaptureService {
 
     private static final Logger logger = LoggerFactory.getLogger(ScreenCaptureService.class);
-    
 
     private VideoEncoderStrategy currentEncoder;
     private int consecutiveFrameSkips = 0;
     private long lastFrameTime = 0;
     private static final int FRAME_RATE = 15; // 15 FPS for optimal balance
 
-
     @Autowired
     private ScreenShareWebSocketHandler webSocketHandler;
-    
+
     @Autowired
     private PerformanceMonitorService performanceMonitor;
 
     // Configuration parameters
     @Value("${screen.capture.frame-rate:15}")
     private int frameRate = 15;
-    
+
     @Value("${screen.capture.jpeg-quality:80}")
     private int jpegQuality = 80;
-    
+
     @Value("${screen.capture.ultra-fast:true}")
     private boolean ultraFastMode = true;
-    
+
     @Value("${screen.capture.zero-latency:true}")
     private boolean zeroLatencyMode = true;
 
@@ -76,7 +75,7 @@ public class ScreenCaptureService {
 
     // ✅ Init segment caching for new viewers
     private byte[] initSegment = null;
-    
+
     // ✅ Stream management
     private ByteArrayOutputStream videoStream;
     private volatile int lastSentPosition = 0;
@@ -161,7 +160,8 @@ public class ScreenCaptureService {
                             logger.info("macOS avfoundation screen capture configured with '1:none'");
                         } catch (Exception e2) {
                             logger.warn("All macOS avfoundation configs failed: primary={}, secondary={}, tertiary={}",
-                                    firstError != null ? firstError.getMessage() : "none", e1.getMessage(), e2.getMessage());
+                                    firstError != null ? firstError.getMessage() : "none", e1.getMessage(),
+                                    e2.getMessage());
                             frameGrabber = null;
                         }
 
@@ -171,7 +171,8 @@ public class ScreenCaptureService {
             } else if (osName.contains("linux")) {
                 // Linux: Use x11grab
                 String display = System.getenv("DISPLAY");
-                if (display == null) display = ":0.0";
+                if (display == null)
+                    display = ":0.0";
 
                 frameGrabber = new FFmpegFrameGrabber(display);
                 frameGrabber.setFormat("x11grab");
@@ -219,19 +220,20 @@ public class ScreenCaptureService {
 
             int targetWidth = screenRect.width;
             int targetHeight = screenRect.height;
-            
+
             recorder = new FFmpegFrameRecorder(videoStream, targetWidth, targetHeight);
-            
-            // ✅ Use encoder factory to get best available encoder (GPU-accelerated when possible)
+
+            // ✅ Use encoder factory to get best available encoder (GPU-accelerated when
+            // possible)
             currentEncoder = VideoEncoderFactory.getBestEncoder();
             currentEncoder.configure(recorder);
             String codecName = currentEncoder.getCodecName();
-            
-            logger.info("✅ Selected encoder: {} (Hardware: {}, CPU reduction: {}%)", 
-                       currentEncoder.getEncoderType(),
-                       currentEncoder.isHardwareAccelerated(),
-                       (int)(currentEncoder.getCpuReduction() * 100));
-            
+
+            logger.info("✅ Selected encoder: {} (Hardware: {}, CPU reduction: {}%)",
+                    currentEncoder.getEncoderType(),
+                    currentEncoder.isHardwareAccelerated(),
+                    (int) (currentEncoder.getCpuReduction() * 100));
+
             recorder.setFormat("mp4");
             recorder.setFrameRate(FRAME_RATE);
             recorder.setPixelFormat(AV_PIX_FMT_YUV420P);
@@ -245,18 +247,18 @@ public class ScreenCaptureService {
 
             recorder.start();
             recorderStarted = true;
-            
-            logger.info("✅ H.264 fMP4 encoder started: {}x{} @ {}fps ({})", 
-                       targetWidth, targetHeight, FRAME_RATE, codecName);
-            
+
+            logger.info("✅ H.264 fMP4 encoder started: {}x{} @ {}fps ({})",
+                    targetWidth, targetHeight, FRAME_RATE, codecName);
+
             // ✅ Wait for init segment to be written
             Thread.sleep(200);
-            
+
             // ✅ Extract and cache init segment (ftyp + moov boxes)
             extractInitSegment();
-            
+
             return true;
-            
+
         } catch (Exception e) {
             logger.error("❌ Failed to initialize H.264 recorder: {}", e.getMessage(), e);
             recorderStarted = false;
@@ -279,43 +281,44 @@ public class ScreenCaptureService {
         }
 
         isCapturing = true;
-        
+
         // ✅ Start performance monitoring with encoder type
         String encoderType = currentEncoder != null ? currentEncoder.getEncoderType() : "Unknown";
         performanceMonitor.startMonitoring(encoderType);
         logger.info("📊 Performance monitoring started");
-        
+
         scheduler = Executors.newScheduledThreadPool(1);
 
         final long frameIntervalMs = 1000 / FRAME_RATE;
-        
+
         scheduler.scheduleAtFixedRate(() -> {
             try {
                 long captureStartTime = System.currentTimeMillis();
-                
+
                 // Grab frame
                 Frame frame = frameGrabber.grabImage();
                 if (frame != null && frame.image != null) {
                     // ✅ Record successful frame capture
                     performanceMonitor.recordFrameCapture();
-                    
+
                     // Set timestamp for smooth playback
                     if (frame.timestamp > 0) {
-                        try { 
-                            recorder.setTimestamp(frame.timestamp); 
-                        } catch (Exception ignore) {}
+                        try {
+                            recorder.setTimestamp(frame.timestamp);
+                        } catch (Exception ignore) {
+                        }
                     }
-                    
+
                     // ✅ Record frame to ByteArrayOutputStream
                     recorder.record(frame);
-                    
+
                     // ✅ Send only NEW bytes written since last send
                     sendIncrementalData();
-                    
+
                     // ✅ Calculate and record latency
                     long latency = System.currentTimeMillis() - captureStartTime;
                     performanceMonitor.recordLatency(latency);
-                    
+
                     // Reset consecutive frame skip counter
                     consecutiveFrameSkips = 0;
                     lastFrameTime = System.currentTimeMillis();
@@ -323,7 +326,7 @@ public class ScreenCaptureService {
                     // ✅ Track dropped frames
                     consecutiveFrameSkips++;
                     performanceMonitor.recordDroppedFrame();
-                    
+
                     if (consecutiveFrameSkips > 5) {
                         logger.warn("⚠️ {} consecutive frames dropped", consecutiveFrameSkips);
                     }
@@ -346,16 +349,16 @@ public class ScreenCaptureService {
         try {
             byte[] fullBuffer = videoStream.toByteArray();
             int currentSize = fullBuffer.length;
-            
+
             // Only send if there's new data
             if (currentSize > lastSentPosition) {
                 byte[] newData = Arrays.copyOfRange(fullBuffer, lastSentPosition, currentSize);
-                
+
                 if (newData.length > 0 && containsMediaFragment(newData)) {
                     String boxInfo = detectBoxType(newData);
-                    logger.debug("📤 Sending {} bytes to {} viewers ({})", 
-                                newData.length, webSocketHandler.getSessionCount(), boxInfo);
-                    
+                    logger.debug("📤 Sending {} bytes to {} viewers ({})",
+                            newData.length, webSocketHandler.getSessionCount(), boxInfo);
+
                     webSocketHandler.broadcastVideoBinary(newData);
                     lastSentPosition = currentSize;
                 }
@@ -370,11 +373,11 @@ public class ScreenCaptureService {
      */
     public void stopCapture() {
         logger.info("🛑 Stopping screen capture...");
-        
+
         // ✅ Stop performance monitoring
         performanceMonitor.stopMonitoring();
         logger.info("📊 Performance monitoring stopped");
-        
+
         // Stop scheduler
         if (scheduler != null && !scheduler.isShutdown()) {
             scheduler.shutdown();
@@ -387,7 +390,7 @@ public class ScreenCaptureService {
                 Thread.currentThread().interrupt();
             }
         }
-        
+
         // Stop and release recorder
         if (recorder != null && recorderStarted) {
             try {
@@ -400,7 +403,7 @@ public class ScreenCaptureService {
             }
             recorder = null;
         }
-        
+
         // ✅ Clean up ByteArrayOutputStream
         if (videoStream != null) {
             try {
@@ -410,15 +413,16 @@ public class ScreenCaptureService {
             }
             videoStream = null;
         }
-        
+
         lastSentPosition = 0;
         isCapturing = false;
-        
+
         logger.info("✅ Screen capture stopped cleanly");
     }
 
     /**
      * Checks if screen capture is properly initialized
+     * 
      * @return true if screen capture is working
      */
     public boolean isInitialized() {
@@ -427,6 +431,7 @@ public class ScreenCaptureService {
 
     /**
      * Checks if screen capture is currently running
+     * 
      * @return true if actively capturing and broadcasting
      */
     public boolean isCapturing() {
@@ -442,6 +447,7 @@ public class ScreenCaptureService {
 
     /**
      * Gets the current capture method being used
+     * 
      * @return String describing the capture method
      */
     public String getCaptureMethod() {
@@ -453,41 +459,46 @@ public class ScreenCaptureService {
 
     /**
      * Gets the current frame rate configuration
+     * 
      * @return The frame rate in FPS
      */
     public int getFrameRate() {
         return frameRate;
     }
-    
+
     /**
      * Gets the current JPEG quality configuration
+     * 
      * @return The JPEG quality percentage (30-100)
      */
     public int getJpegQuality() {
         return jpegQuality;
     }
-    
+
     /**
      * Gets the ultra fast mode configuration
+     * 
      * @return true if ultra fast mode is enabled
      */
     public boolean isUltraFastMode() {
         return ultraFastMode;
     }
-    
+
     /**
      * Gets the zero latency mode configuration
+     * 
      * @return true if zero latency mode is enabled
      */
     public boolean isZeroLatencyMode() {
         return zeroLatencyMode;
     }
-    
+
     /**
      * Writes a BufferedImage as JPEG with specified quality
-     * @param image The image to write
+     * 
+     * @param image        The image to write
      * @param outputStream The output stream to write to
-     * @param quality The JPEG quality (0.0 to 1.0)
+     * @param quality      The JPEG quality (0.0 to 1.0)
      * @return true if successful, false otherwise
      */
     private boolean writeJPEGWithQuality(BufferedImage image, ByteArrayOutputStream outputStream, float quality) {
@@ -497,15 +508,15 @@ public class ScreenCaptureService {
                 logger.warn("No JPEG writers available");
                 return false;
             }
-            
+
             ImageWriter writer = writers.next();
             ImageWriteParam param = writer.getDefaultWriteParam();
-            
+
             if (param.canWriteCompressed()) {
                 param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
                 param.setCompressionQuality(quality);
             }
-            
+
             try (ImageOutputStream ios = ImageIO.createImageOutputStream(outputStream)) {
                 writer.setOutput(ios);
                 writer.write(null, new javax.imageio.IIOImage(image, null, null), param);
@@ -536,33 +547,36 @@ public class ScreenCaptureService {
 
         logger.info("Screen capture service cleaned up");
     }
-    
+
     /**
      * Detects MP4 box types for debugging
      */
     private String detectBoxType(byte[] data) {
-        if (data.length < 8) return "unknown";
-        
+        if (data.length < 8)
+            return "unknown";
+
         StringBuilder boxes = new StringBuilder();
         int offset = 0;
-        
+
         while (offset + 8 <= data.length) {
-            int size = ((data[offset] & 0xFF) << 24) | 
-                       ((data[offset+1] & 0xFF) << 16) |
-                       ((data[offset+2] & 0xFF) << 8) | 
-                       (data[offset+3] & 0xFF);
-            
-            if (size < 8 || size > data.length - offset) break;
-            
-            String type = new String(new byte[]{data[offset+4], data[offset+5], 
-                                                data[offset+6], data[offset+7]});
-            
-            if (boxes.length() > 0) boxes.append(", ");
+            int size = ((data[offset] & 0xFF) << 24) |
+                    ((data[offset + 1] & 0xFF) << 16) |
+                    ((data[offset + 2] & 0xFF) << 8) |
+                    (data[offset + 3] & 0xFF);
+
+            if (size < 8 || size > data.length - offset)
+                break;
+
+            String type = new String(new byte[] { data[offset + 4], data[offset + 5],
+                    data[offset + 6], data[offset + 7] });
+
+            if (boxes.length() > 0)
+                boxes.append(", ");
             boxes.append(type).append("(").append(size).append(")");
-            
+
             offset += size;
         }
-        
+
         return boxes.length() > 0 ? boxes.toString() : "unknown";
     }
 
@@ -577,8 +591,8 @@ public class ScreenCaptureService {
                 if (moovEnd > 0) {
                     initSegment = Arrays.copyOfRange(data, 0, moovEnd);
                     lastSentPosition = moovEnd;
-                    logger.info("✅ Init segment cached: {} bytes (boxes: {})", 
-                               initSegment.length, detectBoxType(initSegment));
+                    logger.info("✅ Init segment cached: {} bytes (boxes: {})",
+                            initSegment.length, detectBoxType(initSegment));
                 } else {
                     logger.warn("⚠️ moov box not found in init data");
                 }
@@ -594,20 +608,21 @@ public class ScreenCaptureService {
     private int findBoxEnd(byte[] data, String boxType) {
         int offset = 0;
         while (offset + 8 <= data.length) {
-            int size = ((data[offset] & 0xFF) << 24) | 
-                       ((data[offset+1] & 0xFF) << 16) |
-                       ((data[offset+2] & 0xFF) << 8) | 
-                       (data[offset+3] & 0xFF);
-            
-            if (size < 8 || offset + size > data.length) break;
-            
-            String type = new String(new byte[]{data[offset+4], data[offset+5], 
-                                                data[offset+6], data[offset+7]});
-            
+            int size = ((data[offset] & 0xFF) << 24) |
+                    ((data[offset + 1] & 0xFF) << 16) |
+                    ((data[offset + 2] & 0xFF) << 8) |
+                    (data[offset + 3] & 0xFF);
+
+            if (size < 8 || offset + size > data.length)
+                break;
+
+            String type = new String(new byte[] { data[offset + 4], data[offset + 5],
+                    data[offset + 6], data[offset + 7] });
+
             if (type.equals(boxType)) {
                 return offset + size;
             }
-            
+
             offset += size;
         }
         return -1;
@@ -619,18 +634,20 @@ public class ScreenCaptureService {
     private int findBox(byte[] data, String boxType) {
         int offset = 0;
         while (offset + 8 <= data.length) {
-            int size = ((data[offset] & 0xFF) << 24) | 
-                       ((data[offset+1] & 0xFF) << 16) |
-                       ((data[offset+2] & 0xFF) << 8) | 
-                       (data[offset+3] & 0xFF);
-            
-            if (size < 8 || offset + size > data.length) break;
-            
-            String type = new String(new byte[]{data[offset+4], data[offset+5], 
-                                                data[offset+6], data[offset+7]});
-            
-            if (type.equals(boxType)) return offset;
-            
+            int size = ((data[offset] & 0xFF) << 24) |
+                    ((data[offset + 1] & 0xFF) << 16) |
+                    ((data[offset + 2] & 0xFF) << 8) |
+                    (data[offset + 3] & 0xFF);
+
+            if (size < 8 || offset + size > data.length)
+                break;
+
+            String type = new String(new byte[] { data[offset + 4], data[offset + 5],
+                    data[offset + 6], data[offset + 7] });
+
+            if (type.equals(boxType))
+                return offset;
+
             offset += size;
         }
         return -1;
