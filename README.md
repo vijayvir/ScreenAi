@@ -3,7 +3,7 @@ A real-time screen sharing application built with **Spring Boot** and **JavaCV**
 
 ## 🚀 Features
 
-### **Current Features (v2.0)**
+### **Current Features**
 - ✅ **H.264 Streaming** - Real-time screen capture with native resolution at 15fps
 - ✅ **fMP4 Fragmented Streaming** - Optimized container format for MediaSource API
 - ✅ **Cross-Platform Hardware Acceleration** - GPU encoding on macOS (VideoToolbox), Windows/Linux (NVENC), software fallback (libx264)
@@ -17,7 +17,6 @@ A real-time screen sharing application built with **Spring Boot** and **JavaCV**
 - ✅ **MediaSource API Integration** - Native browser video decoding
 - ✅ **Platform-Specific Optimization** - Tailored capture methods for each OS
 - ✅ **Init Segment Caching** - Instant playback for late-joining viewers
-- ✅ **Incremental Data Streaming** - Send only new video fragments for efficiency
 
 ## 🛠️ Technology Stack
 
@@ -292,16 +291,6 @@ Check specific component logs:
 
 ## 🏗️ Architecture Overview
 
-### **Design Patterns Used**
-
-| Pattern | Component | Purpose |
-|---------|-----------|---------|
-| **Strategy** | VideoEncoderStrategy | Runtime encoder selection (GPU/CPU) |
-| **Factory** | VideoEncoderFactory | Platform-aware encoder creation |
-| **Builder** | PerformanceMetrics | Flexible metrics object construction |
-| **Observer** | MetricsListener | Real-time performance broadcasting |
-| **Singleton** | Spring @Service | Service lifecycle management |
-
 ### **System Architecture**
 
 ```
@@ -380,7 +369,7 @@ Check specific component logs:
 
 ### **Component Details**
 
-#### **Encoder Package** (Strategy + Factory Pattern)
+#### **Encoder Package**
 ```
 com.screenai.encoder/
 ├── VideoEncoderStrategy.java      (Interface)
@@ -390,7 +379,7 @@ com.screenai.encoder/
 └── LibX264Encoder.java            (Software fallback)
 ```
 
-#### **Performance Monitoring** (Observer + Builder Pattern)
+#### **Performance Monitoring**
 ```
 com.screenai.service/
 └── PerformanceMonitorService.java
@@ -428,13 +417,13 @@ The application now includes comprehensive performance monitoring:
 
 ### **Performance Metrics Thresholds**
 
-| Metric | Good | Warning | Critical |
-|--------|------|---------|----------|
-| **FPS** | 14-15 | 10-13 | < 10 |
-| **Latency** | < 100ms | 100-200ms | > 200ms |
-| **Dropped Frames** | < 5% | 5-10% | > 10% |
-| **CPU Usage** | < 50% | 50-80% | > 80% |
-| **Memory** | < 1GB | 1-2GB | > 2GB |
+| Metric             | Good    | Warning   | Critical |
+|--------------------|---------|-----------|----------|
+| **FPS**            | 14-15   | 10-13     | < 10     |
+| **Latency**        | < 100ms | 100-200ms | > 200ms  |
+| **Dropped Frames** | < 5%    | 5-10%     | > 10%    |
+| **CPU Usage**      | < 50%   | 50-80%    | > 80%    |
+| **Memory**         | < 1GB   | 1-2GB     | > 2GB    |
 
 ### **Typical Performance**
 - **Latency:** ~50-100ms (encoding + network + decoding)
@@ -458,27 +447,8 @@ The application now includes comprehensive performance monitoring:
 - **Memory Scaling:** ~50MB per additional viewer
 
 
-**New Components:**
-- `PerformanceMonitorService` - Real-time metrics tracking
-- `PerformanceMetrics` - Metrics DTO with Builder pattern
-- `PerformanceController` - REST API for metrics
-- `VideoEncoderStrategy` - Strategy interface for encoders
-- `VideoEncoderFactory` - Encoder selection and creation
-- `H264VideoToolboxEncoder` - macOS GPU encoder
-- `NvencEncoder` - NVIDIA GPU encoder
-- `LibX264Encoder` - Software fallback encoder
-
 **Performance Impact:**
 - 70-80% CPU reduction with GPU acceleration
 - Sub-100ms latency monitoring
 - Real-time performance visibility
 - Platform-aware encoder selection
-
-### **v1.0** (Initial Release)
-- ✅ H.264 streaming with fMP4 container
-- ✅ Real-time viewer count
-- ✅ Cross-platform support (Windows, macOS, Linux)
-- ✅ WebSocket binary streaming
-- ✅ MediaSource API integration
-- ✅ Init segment caching
-- ✅ Incremental data streaming
