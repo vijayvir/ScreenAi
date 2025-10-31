@@ -36,6 +36,12 @@
 			<artifactId>javacv-platform</artifactId>
 			<version>1.5.9</version>
 		</dependency>
+		
+		<!-- Jackson Java 8 Date/Time support -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.datatype</groupId>
+			<artifactId>jackson-datatype-jsr310</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

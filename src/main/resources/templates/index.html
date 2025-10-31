@@ -13,7 +13,7 @@
       
        body {
            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+           background: linear-gradient(135deg, #689F38 0%, #33691E 100%);
            min-height: 100vh;
            color: white;
            overflow: hidden;
@@ -26,7 +26,7 @@
            min-height: 100vh;
            padding: 20px;
            text-align: center;
-           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+           background: linear-gradient(135deg, #689F38 0%, #33691E 100%);
            color: white;
        }
       
@@ -34,21 +34,19 @@
            max-width: 600px;
            text-align: center;
            padding: 40px 30px;
-           background: rgba(255, 255, 255, 0.1);
+           background: rgba(255, 255, 255, 0.15);
            border-radius: 20px;
            backdrop-filter: blur(10px);
-           border: 1px solid rgba(255, 255, 255, 0.2);
-           box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+           border: 2px solid rgba(255, 255, 255, 0.3);
+           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
        }
       
        .logo {
            font-size: 3.5rem;
            font-weight: bold;
            margin-bottom: 20px;
-           background: linear-gradient(45deg, #4CAF50, #2196F3);
-           -webkit-background-clip: text;
-           -webkit-text-fill-color: transparent;
-           background-clip: text;
+           color: white;
+           text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
        }
       
        .tagline {
@@ -67,14 +65,16 @@
       
        .feature {
            padding: 20px;
-           background: rgba(255, 255, 255, 0.05);
+           background: rgba(255, 255, 255, 0.1);
            border-radius: 15px;
-           border: 1px solid rgba(255, 255, 255, 0.1);
-           transition: transform 0.3s ease;
+           border: 1px solid rgba(255, 255, 255, 0.2);
+           transition: all 0.3s ease;
        }
       
        .feature:hover {
            transform: translateY(-5px);
+           background: rgba(255, 255, 255, 0.15);
+           box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
        }
       
        .feature-icon {
@@ -84,7 +84,8 @@
       
        .feature h3 {
            margin-bottom: 10px;
-           color: #4CAF50;
+           color: white;
+           font-weight: 600;
        }
       
        .feature p {
@@ -101,11 +102,13 @@
            background: #000;
        }
       
-       #screenView {
+       /* Video element for H.264 streams */
+       #videoView {
            width: 100%;
            height: 100%;
            object-fit: contain;
            background-color: #000;
+           display: none;
        }
       
        /* Status and capture info boxes removed */
@@ -116,19 +119,18 @@
            font-size: 3rem;
            font-weight: bold;
            margin-bottom: 20px;
-           background: linear-gradient(45deg, #4CAF50, #2196F3);
-           -webkit-background-clip: text;
-           -webkit-text-fill-color: transparent;
-           background-clip: text;
+           color: white;
+           text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
        }
       
        .control-status {
-           background: rgba(255,255,255,0.1);
+           background: rgba(255,255,255,0.15);
            padding: 20px;
            border-radius: 15px;
            margin: 30px auto;
            max-width: 400px;
-           border: 1px solid rgba(255, 255, 255, 0.2);
+           border: 2px solid rgba(255, 255, 255, 0.3);
+           box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
        }
       
        .status-line {
@@ -137,8 +139,64 @@
        }
       
        .status-value {
-           color: #4CAF50;
+           color: #FFF;
            font-weight: bold;
+           text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+       }
+       
+       /* Performance Metrics Styles */
+       .performance-metrics {
+           background: rgba(0, 0, 0, 0.4);
+           padding: 15px;
+           border-radius: 10px;
+           margin-top: 20px;
+           border: 1px solid rgba(139, 195, 74, 0.3);
+       }
+       
+       .performance-metrics.hidden {
+           display: none;
+       }
+       
+       .metrics-title {
+           font-size: 14px;
+           font-weight: bold;
+           margin-bottom: 12px;
+           color: #8BC34A;
+           text-shadow: 0 0 10px rgba(139, 195, 74, 0.5);
+       }
+       
+       .metrics-row {
+           display: grid;
+           grid-template-columns: repeat(4, 1fr);
+           gap: 10px;
+       }
+       
+       .metric {
+           background: rgba(255, 255, 255, 0.1);
+           padding: 10px;
+           border-radius: 8px;
+           border: 1px solid rgba(255, 255, 255, 0.2);
+       }
+       
+       .metric-label {
+           font-size: 11px;
+           opacity: 0.8;
+           margin-bottom: 4px;
+       }
+       
+       .metric-value {
+           font-size: 16px;
+           font-weight: bold;
+           color: #8BC34A;
+           font-family: 'Courier New', monospace;
+           text-shadow: 0 0 8px rgba(139, 195, 74, 0.4);
+       }
+       
+       .encoder-info {
+           margin-top: 10px;
+           font-size: 11px;
+           opacity: 0.7;
+           text-align: center;
        }
       
        .error {
@@ -155,17 +213,18 @@
        }
       
        .error button {
-           background: #4CAF50;
+           background: linear-gradient(135deg, #7CB342 0%, #558B2F 100%);
            color: white;
            border: none;
            padding: 10px 20px;
            border-radius: 5px;
            cursor: pointer;
            margin-top: 15px;
+           box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
        }
       
        .error button:hover {
-           background: #45a049;
+           background: linear-gradient(135deg, #8BC34A 0%, #689F38 100%);
        }
       
        /* 🕒 Stream Timestamp Styles */
@@ -179,7 +238,7 @@
            font-family: 'Courier New', monospace;
            font-size: 12px;
            line-height: 1.2;
-           border: 1px solid rgba(76, 175, 80, 0.5);
+           border: 1px solid rgba(139, 195, 74, 0.6);
            backdrop-filter: blur(5px);
            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
            min-width: 160px;
@@ -204,7 +263,7 @@
 
 
        .stream-timestamp-value {
-           color: #4CAF50;
+           color: #8BC34A;
            font-weight: bold;
            font-size: 12px;
        }
@@ -253,13 +312,24 @@
        }
       
        .btn-success {
-           background: #27ae60;
+           background: linear-gradient(135deg, #7CB342 0%, #558B2F 100%);
            color: white;
+           box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+       }
+      
+       .btn-success:hover {
+           background: linear-gradient(135deg, #8BC34A 0%, #689F38 100%);
+           box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
        }
       
        .btn-danger {
-           background: #e74c3c;
+           background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
            color: white;
+           box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+       }
+      
+       .btn-danger:hover {
+           background: linear-gradient(135deg, #e53935 0%, #c62828 100%);
        }
       
        .btn-secondary {
@@ -268,9 +338,10 @@
        }
       
        .btn-primary {
-           background: linear-gradient(45deg, #4CAF50, #2196F3);
+           background: linear-gradient(45deg, #7CB342, #558B2F);
            color: white;
            border: none;
+           box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
        }
       
        .loading {
@@ -318,22 +389,22 @@
            background: rgba(0, 0, 0, 0.95);
            padding: 30px;
            border-radius: 15px;
-           border: 2px solid #4CAF50;
+           border: 2px solid #8BC34A;
            color: white;
            min-width: 400px;
            max-width: 500px;
            z-index: 2000;
            backdrop-filter: blur(15px);
-           box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+           box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
        }
 
 
        .session-results h3 {
-           color: #4CAF50;
+           color: #8BC34A;
            margin-bottom: 20px;
            text-align: center;
            font-size: 20px;
-           border-bottom: 1px solid rgba(76, 175, 80, 0.3);
+           border-bottom: 1px solid rgba(139, 195, 74, 0.3);
            padding-bottom: 10px;
        }
 
@@ -360,7 +431,7 @@
 
 
        .session-detail-value {
-           color: #4CAF50;
+           color: #8BC34A;
            font-family: 'Courier New', monospace;
            font-weight: bold;
        }
@@ -402,6 +473,30 @@
                <div class="status-line">Status: <span id="statusText" class="status-value">Ready</span></div>
                <div class="status-line">Active Viewers: <span id="activeViewers" class="status-value">0</span></div>
                <div class="status-line">Network: <span class="status-value">Connected</span></div>
+               
+               <!-- Performance Metrics -->
+               <div id="performanceMetrics" class="performance-metrics hidden">
+                   <div class="metrics-title">📊 Performance</div>
+                   <div class="metrics-row">
+                       <div class="metric">
+                           <div class="metric-label">FPS</div>
+                           <div class="metric-value" id="metricFps">0</div>
+                       </div>
+                       <div class="metric">
+                           <div class="metric-label">Latency</div>
+                           <div class="metric-value" id="metricLatency">0ms</div>
+                       </div>
+                       <div class="metric">
+                           <div class="metric-label">Dropped</div>
+                           <div class="metric-value" id="metricDropped">0</div>
+                       </div>
+                       <div class="metric">
+                           <div class="metric-label">CPU</div>
+                           <div class="metric-value" id="metricCpu">0%</div>
+                       </div>
+                   </div>
+                   <div class="encoder-info" id="encoderInfo">Encoder: Unknown</div>
+               </div>
            </div>
           
            <div>
@@ -415,9 +510,7 @@
   
    <!-- Stream Viewer -->
    <div id="streamViewer" class="stream-viewer">
-       <img id="screenView" alt="Screen Share Stream" />
-  
-   <!-- Stream Controls with Timestamp -->
+       <video id="videoView" autoplay muted playsinline></video>   <!-- Stream Controls with Timestamp -->
    <div id="streamControls" class="stream-controls">
        <!-- 🕒 Compact Stream Timestamp -->
        <div id="streamTimestamp" class="stream-timestamp">
@@ -465,7 +558,7 @@
            <span id="resultDate" class="session-detail-value">--/--/----</span>
        </div>
        <div style="text-align: center; margin-top: 20px;">
-           <button class="btn" style="background: #4CAF50; color: white;" onclick="document.getElementById('sessionResults').style.display='none'">Close</button>
+           <button class="btn" style="background: linear-gradient(135deg, #7CB342 0%, #558B2F 100%); color: white; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);" onclick="document.getElementById('sessionResults').style.display='none'">Close</button>
        </div>
    </div>
   
@@ -486,6 +579,14 @@
                this.lastFrameTime = Date.now();
                this.isStreaming = false;
                this.intentionalStop = false;
+               
+               // Video streaming support
+               this.isVideoMode = false;
+               this.mediaSource = null;
+               this.sourceBuffer = null;
+               this.videoQueue = [];
+               this.isSourceBufferUpdating = false;
+               this.incompleteChunk = null; // Buffer for incomplete fMP4 boxes
               
                // Page elements
                this.controlPanel = document.getElementById('controlPanel');
@@ -496,7 +597,7 @@
                this.stopBtn = document.getElementById('stopBtn');
               
                // Stream elements
-               this.screenView = document.getElementById('screenView');
+               this.videoView = document.getElementById('videoView');
                this.errorElement = document.getElementById('error');
                this.errorMessage = document.getElementById('errorMessage');
                this.statusText = document.getElementById('statusText');
@@ -522,6 +623,11 @@
                this.resultDuration = document.getElementById('resultDuration');
                this.resultDate = document.getElementById('resultDate');
               
+               // State variables
+               this.initSegmentReceived = false;
+               this.waitingForInit = true;
+               this.videoStarted = false;
+              
                // Event listeners
                this.startStreamBtn.addEventListener('click', () => this.startStreaming());
                this.stopBtn.addEventListener('click', () => this.stopStreaming());
@@ -538,6 +644,9 @@
                this.hideError();
                this.updateControlStatus('Ready');
                document.body.style.overflow = 'auto';
+               
+               // Clean up any remaining video resources
+               this.cleanupVideoStreaming();
            }
           
            showStreamViewer() {
@@ -592,28 +701,72 @@
               
                this.socket = new WebSocket(wsUrl);
               
-               this.socket.onopen = () => {
+               this.socket.onopen = async () => {
                    console.log('WebSocket connected successfully!');
                    this.updateStreamStatus('Connected', 'connected');
                    this.hideError();
                    this.reconnectAttempts = 0;
                   
+                   // 🎬 Initialize H.264 MediaSource for video streaming
+                   console.log('🎬 Initializing MediaSource for H.264 streaming...');
+                   try {
+                       await this.initializeH264Video();
+                       console.log('✅ MediaSource initialized successfully');
+                   } catch (error) {
+                       console.error('❌ Failed to initialize MediaSource:', error);
+                       this.showError('Failed to initialize video player');
+                   }
+                  
                    // 🕒 Initialize timestamps when connected
                    this.initializeTimestamps();
                };
               
-               this.socket.onmessage = (event) => {
-                   try {
-                       const message = JSON.parse(event.data);
-                       this.handleMessage(message);
-                   } catch (error) {
-                       console.error('Failed to parse WebSocket message:', error);
+               this.socket.onmessage = async (event) => {
+                   // Enhanced debugging for all message types
+                   console.log('🌐 WebSocket message received:', {
+                       dataType: typeof event.data,
+                       constructor: event.data.constructor.name,
+                       isArrayBuffer: event.data instanceof ArrayBuffer,
+                       isBlob: event.data instanceof Blob,
+                       size: event.data.byteLength || event.data.size || event.data.length || 'unknown'
+                   });
+                   
+                   if (event.data instanceof ArrayBuffer) {
+                       // Binary H.264 video data
+                       console.log(`📹 Received H.264 ArrayBuffer: ${event.data.byteLength} bytes`);
+                       const view = new Uint8Array(event.data, 0, Math.min(16, event.data.byteLength));
+                       console.log('🔍 First 16 bytes:', Array.from(view).map(b => b.toString(16).padStart(2, '0')).join(' '));
+                       
+                       await this.handleBinaryVideoData(event.data);
+                       
+                   } else if (event.data instanceof Blob) {
+                       // Handle Blob data by converting to ArrayBuffer
+                       console.log(`📹 Received H.264 Blob: ${event.data.size} bytes, type: ${event.data.type}`);
+                       try {
+                           const buffer = await event.data.arrayBuffer();
+                           console.log(`📹 Converted Blob to ArrayBuffer: ${buffer.byteLength} bytes`);
+                           await this.handleBinaryVideoData(buffer);
+                       } catch (error) {
+                           console.error('❌ Failed to convert Blob to ArrayBuffer:', error);
+                       }
+                   } else {
+                       // Text JSON messages (control messages only)
+                       console.log(`📩 Received text message: ${event.data}`);
+                       try {
+                           const message = JSON.parse(event.data);
+                           this.handleMessage(message);
+                       } catch (error) {
+                           console.error('❌ Failed to parse WebSocket message:', error);
+                       }
                    }
                };
               
                this.socket.onclose = (event) => {
                    console.log('WebSocket closed - Code:', event.code, 'Reason:', event.reason);
                    this.updateStreamStatus('Disconnected', 'disconnected');
+                   
+                   // Clean up video resources
+                   this.cleanupVideoStreaming();
                   
                    // 🕒 Finalize timestamps when connection closes unexpectedly
                    if (this.isStreaming && !this.intentionalStop) {
@@ -810,6 +963,9 @@
                        // 🕒 Finalize timestamps when stopping
                        this.finalizeTimestamps();
                       
+                       // Clean up video resources
+                       this.cleanupVideoStreaming();
+                       
                        // Close WebSocket
                        if (this.socket) {
                            this.socket.close();
@@ -854,23 +1010,688 @@
 
 
           
+           /**
+            * Initialize MediaSource for H.264 video streaming with enhanced compatibility
+            */
+           async initializeH264Video() {
+               console.log('🎬 Initializing H.264 MediaSource...');
+               
+               if (!window.MediaSource) {
+                   console.error('❌ MediaSource API not supported');
+                   this.showError('Browser does not support H.264 video streaming');
+                   return false;
+               }
+
+               try {
+                   // Clean up existing MediaSource
+                   if (this.mediaSource && this.mediaSource.readyState !== 'closed') {
+                       console.log('🔄 Cleaning up existing MediaSource...');
+                       try {
+                           if (this.sourceBuffer && !this.sourceBuffer.updating) {
+                               this.mediaSource.removeSourceBuffer(this.sourceBuffer);
+                           }
+                           if (this.mediaSource.readyState === 'open') {
+                               this.mediaSource.endOfStream();
+                           }
+                       } catch (e) {
+                           console.log('⚠️ MediaSource cleanup warning:', e.message);
+                       }
+                   }
+
+                   // Check codec support - prioritize fMP4 to match JavaCV output
+                   const supportedCodecs = [
+                       'video/mp4; codecs="avc1.42E01E"',    // fMP4 with H.264 Baseline - matches JavaCV
+                       'video/mp4; codecs="avc1.4D401E"',    // fMP4 with H.264 Main fallback
+                       'video/mp4; codecs="avc1.640028"'     // fMP4 with H.264 High fallback
+                   ];
+                   
+                   console.log('🔍 Checking codec support:');
+                   let codecUsed = null;
+                   for (const codec of supportedCodecs) {
+                       const isSupported = MediaSource.isTypeSupported(codec);
+                       console.log(`  ${codec}: ${isSupported ? '✅' : '❌'}`);
+                       if (isSupported && !codecUsed) {
+                           codecUsed = codec;
+                       }
+                   }
+                   
+                   if (!codecUsed) {
+                       console.error('❌ No supported H.264 codec found');
+                       this.showError('Browser does not support required H.264 codecs');
+                       return false;
+                   }
+
+                   // Create new MediaSource
+                   this.mediaSource = new MediaSource();
+                   this.videoView.src = URL.createObjectURL(this.mediaSource);
+                   
+                   return new Promise((resolve, reject) => {
+                       this.mediaSource.addEventListener('sourceopen', async () => {
+                           console.log('🎯 MediaSource opened successfully');
+                           
+                           try {
+                               this.sourceBuffer = this.mediaSource.addSourceBuffer(codecUsed);
+                               console.log('🎥 SourceBuffer created with codec:', codecUsed);
+                               
+                               // Configure SourceBuffer for low latency
+                               this.sourceBuffer.mode = 'sequence';
+                               
+                               this.sourceBuffer.addEventListener('updateend', () => {
+                                   console.log('📦 SourceBuffer update completed');
+                                   
+                                   // Low-latency buffer management: keep only last 2 seconds
+                                   const currentTime = this.videoView.currentTime;
+                                   const buffered = this.sourceBuffer.buffered;
+                                   
+                                   if (buffered.length > 0) {
+                                       const bufferStart = buffered.start(0);
+                                       const bufferEnd = buffered.end(buffered.length - 1);
+                                       
+                                       // Remove old buffer (keep last 2 seconds)
+                                       if (bufferEnd - bufferStart > 2 && currentTime - bufferStart > 2) {
+                                           try {
+                                               this.sourceBuffer.remove(bufferStart, currentTime - 2);
+                                               console.debug('🧹 Trimmed old buffer for low latency');
+                                               return; // Don't process pending chunks yet
+                                           } catch (e) {
+                                               console.debug('Buffer trim skipped:', e.message);
+                                           }
+                                       }
+                                   }
+                                   
+                                   this.processVideoQueue();
+                               });
+                               
+                               this.sourceBuffer.addEventListener('error', (e) => {
+                                   console.error('❌ SourceBuffer error:', e);
+                                   console.error('   SourceBuffer details:', {
+                                       updating: this.sourceBuffer.updating,
+                                       bufferedRanges: this.sourceBuffer.buffered.length,
+                                       mode: this.sourceBuffer.mode,
+                                       timestampOffset: this.sourceBuffer.timestampOffset
+                                   });
+                                   console.error('   MediaSource details:', {
+                                       readyState: this.mediaSource.readyState,
+                                       duration: this.mediaSource.duration
+                                   });
+                                   this.showError('H.264 SourceBuffer error - check console for details');
+                               });
+                               
+                               // Configure video element for low latency
+                               this.videoView.muted = true;
+                               this.videoView.autoplay = true;
+                               this.videoView.playsInline = true;
+                               
+                               // Low latency video settings
+                               if ('fastSeek' in this.videoView) {
+                                   this.videoView.fastSeek = true;
+                               }
+                               
+                               console.log('🎬 H.264 video streaming ready!');
+                               this.isVideoMode = true;
+                               this.switchToVideoView();
+                               
+                               resolve(true);
+                               
+                           } catch (error) {
+                               console.error('❌ Failed to create SourceBuffer:', error);
+                               reject(error);
+                           }
+                       });
+                       
+                       this.mediaSource.addEventListener('sourceended', () => {
+                           console.log('📹 MediaSource ended');
+                       });
+                       
+                       this.mediaSource.addEventListener('error', (e) => {
+                           console.error('❌ MediaSource error:', e);
+                           reject(e);
+                       });
+                   });
+                   
+               } catch (error) {
+                   console.error('❌ Failed to initialize H.264 MediaSource:', error);
+                   this.showError('H.264 initialization failed: ' + error.message);
+                   return false;
+               }
+           }
+           
+           /**
+            * Enhanced video queue processing with low latency optimization
+            */
+           processVideoQueue() {
+               // Limit pending queue to prevent buildup
+               if (this.videoQueue.length > 5) {
+                   console.warn('⚠️ Dropping old chunks to reduce latency');
+                   this.videoQueue.shift(); // Drop oldest chunk
+               }
+               
+               if (this.videoQueue.length > 0 && this.sourceBuffer && !this.sourceBuffer.updating) {
+                   const data = this.videoQueue.shift();
+                   try {
+                       this.sourceBuffer.appendBuffer(data);
+                       console.log('📦 Queued H.264 data processed:', data.byteLength, 'bytes');
+                       
+                       // Keep video playback as close to live as possible
+                       if (this.videoView.buffered.length > 0) {
+                           const bufferEnd = this.videoView.buffered.end(this.videoView.buffered.length - 1);
+                           const currentTime = this.videoView.currentTime;
+                           
+                           // If we're falling behind by more than 0.5 seconds, jump forward
+                           if (bufferEnd - currentTime > 0.5) {
+                               this.videoView.currentTime = bufferEnd - 0.2;
+                               console.debug('⚡ Jumped to live edge, latency:', (bufferEnd - currentTime).toFixed(2), 's');
+                           }
+                       }
+                   } catch (error) {
+                       console.error('❌ Error processing queued data:', error);
+                   }
+               }
+           }
+           
+           /**
+            * MediaSource recovery function
+            */
+           async reinitializeMediaSource() {
+               console.log('🔄 Reinitializing MediaSource for recovery...');
+               try {
+                   await this.initializeH264Video();
+                   console.log('✅ MediaSource recovered successfully');
+               } catch (error) {
+                   console.error('❌ Failed to recover MediaSource:', error);
+               }
+           }
+
+           /**
+            * Parse fMP4 boxes from data and return complete boxes
+            */
+           parseFMP4Boxes(uint8Array) {
+               const boxes = [];
+               let offset = 0;
+               
+               while (offset < uint8Array.length) {
+                   if (offset + 8 > uint8Array.length) {
+                       // Not enough data for a box header
+                       break;
+                   }
+                   
+                   // Read box size (big-endian 32-bit integer)
+                   const boxSize = (uint8Array[offset] << 24) |
+                                 (uint8Array[offset + 1] << 16) |
+                                 (uint8Array[offset + 2] << 8) |
+                                  uint8Array[offset + 3];
+                   
+                   // Read box type
+                   const boxType = String.fromCharCode(
+                       uint8Array[offset + 4],
+                       uint8Array[offset + 5],
+                       uint8Array[offset + 6],
+                       uint8Array[offset + 7]
+                   );
+                   
+                   if (boxSize === 0) {
+                       // Box extends to end of file
+                       boxes.push({
+                           type: boxType,
+                           size: uint8Array.length - offset,
+                           offset: offset
+                       });
+                       break;
+                   }
+                   
+                   if (boxSize < 8) {
+                       console.error('Invalid box size:', boxSize, 'at offset:', offset);
+                       break;
+                   }
+                   
+                   if (offset + boxSize > uint8Array.length) {
+                       // Incomplete box
+                       break;
+                   }
+                   
+                   boxes.push({
+                       type: boxType,
+                       size: boxSize,
+                       offset: offset
+                   });
+                   
+                   offset += boxSize;
+               }
+               
+               return {
+                   boxes: boxes,
+                   bytesConsumed: offset,
+                   hasIncompleteBox: offset < uint8Array.length
+               };
+           }
+           
+           /**
+            * Check if boxes contain initialization segment
+            */
+           hasInitBoxes(boxes) {
+               return boxes.some(box => box.type === 'ftyp' || box.type === 'moov');
+           }
+
+           /**
+            * Check if data contains initialization segment (ftyp and moov boxes)
+            */
+           containsInitSegment(uint8Array) {
+               if (uint8Array.length < 8) return false;
+               
+               let offset = 0;
+               let hasFtyp = false;
+               let hasMoov = false;
+               
+               while (offset + 8 <= uint8Array.length) {
+                   const boxSize = (uint8Array[offset] << 24) |
+                                 (uint8Array[offset + 1] << 16) |
+                                 (uint8Array[offset + 2] << 8) |
+                                  uint8Array[offset + 3];
+                   
+                   const boxType = String.fromCharCode(
+                       uint8Array[offset + 4],
+                       uint8Array[offset + 5],
+                       uint8Array[offset + 6],
+                       uint8Array[offset + 7]
+                   );
+                   
+                   if (boxType === 'ftyp') hasFtyp = true;
+                   if (boxType === 'moov') hasMoov = true;
+                   
+                   if (boxSize < 8 || offset + boxSize > uint8Array.length) break;
+                   offset += boxSize;
+               }
+               
+               return hasFtyp && hasMoov;
+           }
+
+           /**
+            * Get box information for debugging
+            */
+           getBoxInfo(uint8Array) {
+               if (uint8Array.length < 8) return 'too small';
+               
+               const boxes = [];
+               let offset = 0;
+               
+               while (offset + 8 <= uint8Array.length && boxes.length < 5) {
+                   const boxSize = (uint8Array[offset] << 24) |
+                                 (uint8Array[offset + 1] << 16) |
+                                 (uint8Array[offset + 2] << 8) |
+                                  uint8Array[offset + 3];
+                   
+                   const boxType = String.fromCharCode(
+                       uint8Array[offset + 4],
+                       uint8Array[offset + 5],
+                       uint8Array[offset + 6],
+                       uint8Array[offset + 7]
+                   );
+                   
+                   boxes.push(`${boxType}(${boxSize})`);
+                   
+                   if (boxSize < 8 || offset + boxSize > uint8Array.length) break;
+                   offset += boxSize;
+               }
+               
+               return boxes.join(', ') || 'unknown';
+           }
+
+           /**
+            * Handle binary H.264 video data from WebSocket with ultra-low latency optimization
+            * Process fMP4 container with H.264 for MediaSource API
+            */
+           async handleBinaryVideoData(data) {
+               if (!data || data.byteLength === 0) {
+                   console.warn('⚠️ Received empty data');
+                   return;
+               }
+
+               try {
+                   const uint8Data = new Uint8Array(data);
+                   
+                   // Check for initialization segment
+                   const hasInit = this.containsInitSegment(uint8Data);
+                   const boxInfo = this.getBoxInfo(uint8Data);
+                   
+                   console.log(`🎥 Received fMP4 chunk: ${uint8Data.length} bytes, boxes: ${boxInfo}, hasInit: ${hasInit}`);
+                   
+                   // CRITICAL: Must receive init segment first
+                   if (!this.initSegmentReceived && !hasInit) {
+                       console.warn('⚠️ Waiting for initialization segment, dropping media data');
+                       return;
+                   }
+                   
+                   if (hasInit) {
+                       console.log('✅ Initialization segment detected');
+                       this.initSegmentReceived = true;
+                       this.waitingForInit = false;
+                   }
+                   
+                   // Append to SourceBuffer
+                   if (!this.sourceBuffer || this.sourceBuffer.updating) {
+                       if (this.videoQueue.length >= 10) {
+                           console.warn('⚠️ Queue full, dropping oldest chunk');
+                           this.videoQueue.shift();
+                       }
+                       this.videoQueue.push(uint8Data);
+                       console.log(`📦 Queued (${this.videoQueue.length} pending)`);
+                       return;
+                   }
+                   
+                   // Validate SourceBuffer is still attached to MediaSource
+                   if (!this.mediaSource || this.mediaSource.readyState === 'closed' || 
+                       !this.mediaSource.sourceBuffers.length) {
+                       console.warn('⚠️ MediaSource not ready or closed, queuing data');
+                       this.videoQueue.push(uint8Data);
+                       return;
+                   }
+                   
+                   try {
+                       this.isAppending = true;
+                       this.sourceBuffer.appendBuffer(uint8Data);
+                       console.log(`✅ Appended ${uint8Data.length} bytes to SourceBuffer`);
+                   } catch (appendError) {
+                       console.error('❌ Failed to append to SourceBuffer:', appendError);
+                       this.isAppending = false;
+                       
+                       // If SourceBuffer was removed, try to reinitialize
+                       if (appendError.name === 'InvalidStateError') {
+                           console.log('🔄 Attempting to reinitialize MediaSource...');
+                           this.reinitializeMediaSource();
+                       }
+                       return;
+                   }
+                   
+                   // Auto-play when we have enough data
+                   if (!this.videoStarted && this.sourceBuffer.buffered.length > 0) {
+                       setTimeout(() => {
+                           this.videoView.play().then(() => {
+                               console.log('▶️ Video playback started');
+                               this.videoStarted = true;
+                           }).catch(e => {
+                               console.warn('⚠️ Autoplay prevented, click video to play');
+                           });
+                       }, 100);
+                   }
+                   
+               } catch (error) {
+                   console.error('❌ Error handling video data:', error);
+                   console.error('Stack:', error.stack);
+                   this.showError(`Video processing error: ${error.message}`);
+               }
+           }
+
+           /**
+            * Create MP4 fragment from raw H.264 data for MediaSource API
+            * This wraps raw H.264 NAL units in MP4 container format
+            */
+           createMP4Fragment(h264Data) {
+               try {
+                   // For simplicity, we'll try to feed raw H.264 directly to MediaSource
+                   // and let the browser handle the containerization if possible
+                   console.log('🔧 Creating MP4 fragment from raw H.264 data');
+                   
+                   // Check if this is valid H.264 data by looking for NAL units
+                   let hasNalUnits = false;
+                   for (let i = 0; i < h264Data.length - 3; i++) {
+                       if (h264Data[i] === 0x00 && h264Data[i + 1] === 0x00 && 
+                           h264Data[i + 2] === 0x00 && h264Data[i + 3] === 0x01) {
+                           hasNalUnits = true;
+                           break;
+                       }
+                   }
+                   
+                   if (!hasNalUnits) {
+                       console.error('❌ No valid H.264 NAL units found in data');
+                       return null;
+                   }
+                   
+                   console.log('✅ Valid H.264 NAL units detected, returning raw data for direct processing');
+                   return h264Data.buffer;
+                   
+               } catch (error) {
+                   console.error('❌ Error creating MP4 fragment:', error);
+                   return null;
+               }
+           }
+
+           /**
+            * Process video data immediately for ultra-low latency (bypasses queue)
+            */
+           processVideoDataImmediate(videoData) {
+               try {
+                   if (this.sourceBuffer && !this.sourceBuffer.updating) {
+                       this.isSourceBufferUpdating = true;
+                       this.sourceBuffer.appendBuffer(videoData);
+                   } else {
+                       // Fallback to queue if buffer is busy
+                       this.videoQueue.push(videoData);
+                   }
+               } catch (error) {
+                   console.error('Error in immediate video processing:', error);
+                   this.videoQueue.push(videoData); // Fallback to queue
+               }
+           }
+           processVideoDataImmediate(videoData) {
+               try {
+                   this.isSourceBufferUpdating = true;
+                   this.sourceBuffer.appendBuffer(videoData);
+                   
+                   // Manage buffer size for low latency
+                   this.manageBufferSize();
+                   
+               } catch (error) {
+                   console.error('Error in immediate video processing:', error);
+                   this.isSourceBufferUpdating = false;
+                   // Fallback to queue processing
+                   this.videoQueue.push(videoData);
+                   this.processVideoQueue();
+               }
+           }
+
+           /**
+            * Process queued video data with latency optimizations
+            */
+           processVideoQueue() {
+               if (this.isSourceBufferUpdating || this.videoQueue.length === 0 || !this.sourceBuffer) {
+                   return;
+               }
+               
+               // Validate MediaSource and SourceBuffer are still valid
+               if (!this.mediaSource || this.mediaSource.readyState === 'closed' || 
+                   !this.mediaSource.sourceBuffers.length) {
+                   console.warn('⚠️ MediaSource closed during queue processing, clearing queue');
+                   this.videoQueue = [];
+                   return;
+               }
+               
+               try {
+                   const videoData = this.videoQueue.shift();
+                   
+                   if (this.sourceBuffer.updating) {
+                       // For ultra-low latency, drop frame instead of re-queuing
+                       console.debug('Dropping frame to maintain low latency');
+                       return;
+                   }
+                   
+                   this.isSourceBufferUpdating = true;
+                   this.sourceBuffer.appendBuffer(videoData);
+                   
+                   // Manage buffer to prevent accumulation
+                   this.manageBufferSize();
+                   
+               } catch (error) {
+                   console.error('Error appending video data:', error);
+                   this.videoQueue = []; // Clear entire queue on error
+                   this.isSourceBufferUpdating = false;
+               }
+           }
+
+           /**
+            * Manage buffer size to maintain ultra-low latency
+            */
+           manageBufferSize() {
+               if (!this.sourceBuffer || this.sourceBuffer.updating) {
+                   return;
+               }
+               
+               try {
+                   const buffered = this.sourceBuffer.buffered;
+                   if (buffered.length > 0) {
+                       const currentTime = this.videoView.currentTime;
+                       const bufferedEnd = buffered.end(buffered.length - 1);
+                       
+                       // Remove old data if buffer gets too large (keep only last 2 seconds)
+                       if (bufferedEnd - currentTime > 2) {
+                           const removeEnd = currentTime - 0.5; // Keep 0.5s before current time
+                           if (removeEnd > 0) {
+                               this.sourceBuffer.remove(0, removeEnd);
+                           }
+                       }
+                   }
+               } catch (error) {
+                   console.debug('Buffer management error (non-critical):', error);
+               }
+           }
+
+           /**
+            * Initialize video display for H.264 streaming
+            */
+           switchToVideoView() {
+               this.controlPanel.style.display = 'none';
+               this.streamViewer.style.display = 'block';
+               this.videoView.style.display = 'block';
+               
+               console.log('🎬 Switched to H.264 video view');
+               console.log('📺 Video element ready:', {
+                   width: this.videoView.videoWidth,
+                   height: this.videoView.videoHeight,
+                   readyState: this.videoView.readyState,
+                   paused: this.videoView.paused
+               });
+           }
+
+
+
+           /**
+            * Clean up video streaming resources
+            */
+           cleanupVideoStreaming() {
+               console.log('Cleaning up video streaming resources');
+               
+               // Stop video playback
+               if (this.videoView) {
+                   this.videoView.pause();
+                   this.videoView.src = '';
+                   this.videoView.load();
+               }
+               
+               // Clean up MediaSource
+               if (this.mediaSource) {
+                   if (this.mediaSource.readyState === 'open') {
+                       try {
+                           if (this.sourceBuffer && !this.sourceBuffer.updating) {
+                               this.mediaSource.removeSourceBuffer(this.sourceBuffer);
+                           }
+                           this.mediaSource.endOfStream();
+                       } catch (error) {
+                           console.debug('Error during MediaSource cleanup:', error);
+                       }
+                   }
+                   
+                   // Revoke object URL to free memory
+                   if (this.videoView.src) {
+                       URL.revokeObjectURL(this.videoView.src);
+                   }
+               }
+               
+               // Reset state
+               this.videoQueue = [];
+               this.sourceBuffer = null;
+               this.mediaSource = null;
+               this.isSourceBufferUpdating = false;
+               this.isVideoMode = false;
+               
+               // Hide video element
+               this.videoView.style.display = 'none';
+           }
+
            handleMessage(message) {
                switch (message.type) {
                    case 'connected':
                        console.log('Server acknowledged connection');
                        break;
+                   
+                   case 'viewerCount':
+                       // Update active viewers count
+                       if (this.activeViewers && message.count !== undefined) {
+                           this.activeViewers.textContent = message.count;
+                           console.log(`👥 Active viewers updated: ${message.count}`);
+                       }
+                       break;
+                   
+                   case 'performance':
+                       // Update performance metrics
+                       this.updatePerformanceMetrics(message.metrics);
+                       break;
                       
                    case 'frame':
-                       // Update the screen image with new frame data
-                       this.screenView.src = message.data;
-                       this.updateStreamStatus('Streaming', 'connected');
-                       this.frameCount++;
-                       this.lastFrameTime = Date.now();
+                       // Legacy JPEG frame support removed - H.264 only
+                       console.warn('Received legacy JPEG frame - ignoring (H.264-only mode)');
                        break;
                       
                    default:
                        console.log('Unknown message type:', message.type);
                }
+           }
+           
+           updatePerformanceMetrics(metrics) {
+               if (!metrics) return;
+               
+               // Show metrics panel if hidden
+               const metricsPanel = document.getElementById('performanceMetrics');
+               if (metricsPanel && metricsPanel.classList.contains('hidden')) {
+                   metricsPanel.classList.remove('hidden');
+               }
+               
+               // Update FPS
+               const fpsElement = document.getElementById('metricFps');
+               if (fpsElement) {
+                   fpsElement.textContent = metrics.fps.toFixed(1);
+               }
+               
+               // Update Latency
+               const latencyElement = document.getElementById('metricLatency');
+               if (latencyElement) {
+                   latencyElement.textContent = `${metrics.latencyMs}ms`;
+               }
+               
+               // Update Dropped Frames
+               const droppedElement = document.getElementById('metricDropped');
+               if (droppedElement) {
+                   const dropRate = metrics.dropRate.toFixed(1);
+                   droppedElement.textContent = `${metrics.droppedFrames} (${dropRate}%)`;
+                   // Change color if drop rate is high
+                   if (metrics.dropRate > 5) {
+                       droppedElement.style.color = '#FF5722';
+                   } else {
+                       droppedElement.style.color = '#8BC34A';
+                   }
+               }
+               
+               // Update CPU Usage
+               const cpuElement = document.getElementById('metricCpu');
+               if (cpuElement) {
+                   cpuElement.textContent = `${metrics.cpuUsage.toFixed(1)}%`;
+               }
+               
+               // Update Encoder Info
+               const encoderElement = document.getElementById('encoderInfo');
+               if (encoderElement) {
+                   encoderElement.textContent = `Encoder: ${metrics.encoderType}`;
+               }
+               
+               console.log(`📊 Performance: FPS=${metrics.fps.toFixed(1)}, Latency=${metrics.latencyMs}ms, Dropped=${metrics.droppedFrames}, CPU=${metrics.cpuUsage.toFixed(1)}%`);
            }
           
            updateStreamStatus(text, className) {

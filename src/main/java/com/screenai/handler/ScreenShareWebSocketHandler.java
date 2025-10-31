@@ -1,23 +1,49 @@
 package com.screenai.handler;
 
+import java.util.Iterator;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.WebSocketMessage;
 import org.springframework.web.socket.WebSocketSession;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.screenai.model.PerformanceMetrics;
+import com.screenai.service.PerformanceMonitorService;
+import com.screenai.service.ScreenCaptureService;
+
+import jakarta.annotation.PostConstruct;
+
 
 @Component
-public class ScreenShareWebSocketHandler implements WebSocketHandler {
+public class ScreenShareWebSocketHandler implements WebSocketHandler, PerformanceMonitorService.MetricsListener {
     
     private static final Logger logger = LoggerFactory.getLogger(ScreenShareWebSocketHandler.class);
     private final CopyOnWriteArraySet<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    @Lazy
+    @Autowired
+    private ScreenCaptureService screenCaptureService;
+    
+    @Autowired
+    private PerformanceMonitorService performanceMonitor;
+    
+    @PostConstruct
+    public void init() {
+        // Register as metrics listener
+        performanceMonitor.addMetricsListener(this);
+        logger.info("WebSocketHandler registered as performance metrics listener");
+    }
     
     // Connection limits and session management
     private static final int MAX_CONNECTIONS = 50;
@@ -52,6 +78,19 @@ public class ScreenShareWebSocketHandler implements WebSocketHandler {
             // Send welcome message
             TextMessage welcomeMessage = new TextMessage("{\"type\":\"connected\",\"message\":\"Connected to screen share\"}");
             session.sendMessage(welcomeMessage);
+            
+            // ✅ Send cached init segment to new viewer if available
+            if (screenCaptureService != null) {
+                byte[] initSeg = screenCaptureService.getInitSegment();
+                if (initSeg != null && initSeg.length > 0) {
+                    BinaryMessage initMessage = new BinaryMessage(initSeg);
+                    session.sendMessage(initMessage);
+                    logger.info("📤 Sent init segment ({} bytes) to new viewer", initSeg.length);
+                }
+            }
+            
+            // Broadcast updated viewer count to all clients
+            broadcastViewerCount();
                        
         } catch (Exception e) {
             logger.error("Error establishing WebSocket connection", e);
@@ -98,6 +137,9 @@ public class ScreenShareWebSocketHandler implements WebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus closeStatus) throws Exception {
         sessions.remove(session);
         logger.info("Screen viewer disconnected: {} (Remaining viewers: {})", session.getId(), sessions.size());
+        
+        // Broadcast updated viewer count to remaining clients
+        broadcastViewerCount();
     }
     
     @Override
@@ -105,33 +147,62 @@ public class ScreenShareWebSocketHandler implements WebSocketHandler {
         return false;
     }
     
+
+
     /**
-     * Broadcasts a screen frame to all connected viewers
-     * @param frameData Base64 encoded JPEG image data
+     * Broadcasts H.264 binary video data to all connected viewers
+     * @param videoData Binary H.264 fMP4 video data
      */
-    public void broadcastScreenFrame(String frameData) {
+    public void broadcastVideoBinary(byte[] videoData) {
+        // Fast early exit checks for performance
+        if (videoData == null || videoData.length == 0) {
+            return;
+        }
+        
         if (sessions.isEmpty()) {
             return; // No viewers connected
         }
-        
-        String message = "{\"type\":\"frame\",\"data\":\"data:image/jpeg;base64," + frameData + "\"}";
-        TextMessage frameMessage = new TextMessage(message);
-        
-        // Create a copy to avoid concurrent modification
-        CopyOnWriteArraySet<WebSocketSession> sessionsCopy = new CopyOnWriteArraySet<>(sessions);
-        
-        for (WebSocketSession session : sessionsCopy) {
-            if (!session.isOpen()) {
-                sessions.remove(session);
-                continue;
+
+        try {
+            // Create binary message once for all sessions (efficiency)
+            BinaryMessage binaryMessage = new BinaryMessage(videoData);
+            
+            // Use iterator for better performance than copying the set
+            Iterator<WebSocketSession> iterator = sessions.iterator();
+            int successfulSends = 0;
+            
+            while (iterator.hasNext()) {
+                WebSocketSession session = iterator.next();
+                
+                // Quick check for closed sessions
+                if (!session.isOpen()) {
+                    logger.debug("Removing closed session: {}", session.getId());
+                    iterator.remove(); // Safe removal during iteration
+                    continue;
+                }
+                
+                try {
+                    // Send immediately without buffering for low latency
+                    session.sendMessage(binaryMessage);
+                    successfulSends++;
+                    
+                } catch (Exception e) {
+                    // Handle failed sessions with detailed logging
+                    logger.warn("H.264 transmission failed to session {}: {}", session.getId(), e.getMessage());
+                    iterator.remove(); // Remove failed session
+                }
             }
             
-            try {
-                session.sendMessage(frameMessage);
-            } catch (Exception e) {
-                logger.debug("Failed to send frame to session {}: {}", session.getId(), e.getMessage());
-                sessions.remove(session);
+            // Reduced logging - only log errors or every 100th frame
+            if (successfulSends == 0 && sessions.size() > 0) {
+                logger.warn("H.264 data failed to send to all {} sessions", sessions.size());
+            } else if (successfulSends > 0) {
+                // TEMP DEBUG: Log every send to verify data is flowing
+                logger.info("📤 H.264 data sent: {} bytes to {}/{} sessions", videoData.length, successfulSends, sessions.size());
             }
+            
+        } catch (Exception e) {
+            logger.error("Error in H.264 binary broadcast: {}", e.getMessage());
         }
     }
     
@@ -141,6 +212,23 @@ public class ScreenShareWebSocketHandler implements WebSocketHandler {
      */
     public int getViewerCount() {
         return sessions.size();
+    }
+    
+    /**
+     * Get number of active WebSocket sessions
+     */
+    public int getSessionCount() {
+        return sessions.size();
+    }
+
+    /**
+     * Get cached init segment for late-joining viewers
+     */
+    public byte[] getInitSegment() {
+        if (screenCaptureService != null) {
+            return screenCaptureService.getInitSegment();
+        }
+        return null;
     }
     
     /**
@@ -182,5 +270,71 @@ public class ScreenShareWebSocketHandler implements WebSocketHandler {
         if (removedCount > 0) {
             logger.debug("Cleaned up {} stale sessions. Active sessions: {}", removedCount, sessions.size());
         }
+    }
+    
+    /**
+     * Broadcast viewer count to all connected sessions
+     */
+    private void broadcastViewerCount() {
+        int count = sessions.size();
+        String message = String.format("{\"type\":\"viewerCount\",\"count\":%d}", count);
+        TextMessage viewerCountMessage = new TextMessage(message);
+        
+        for (WebSocketSession session : sessions) {
+            try {
+                if (session.isOpen()) {
+                    session.sendMessage(viewerCountMessage);
+                }
+            } catch (Exception e) {
+                logger.debug("Failed to send viewer count to session {}: {}", session.getId(), e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Implementation of MetricsListener interface
+     * Called when performance metrics are updated
+     */
+    @Override
+    public void onMetricsUpdate(PerformanceMetrics metrics) {
+        try {
+            // Create JSON message with performance metrics
+            String jsonMessage = objectMapper.writeValueAsString(new PerformanceMessage(metrics));
+            TextMessage message = new TextMessage(jsonMessage);
+            
+            // Broadcast to all connected sessions
+            int sentCount = 0;
+            for (WebSocketSession session : sessions) {
+                try {
+                    if (session.isOpen()) {
+                        session.sendMessage(message);
+                        sentCount++;
+                    }
+                } catch (Exception e) {
+                    logger.debug("Failed to send performance metrics to session {}: {}", 
+                                session.getId(), e.getMessage());
+                }
+            }
+            
+            logger.debug("📊 Performance metrics broadcasted to {} viewers", sentCount);
+            
+        } catch (Exception e) {
+            logger.error("Error broadcasting performance metrics: {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * DTO for performance metrics WebSocket message
+     */
+    private static class PerformanceMessage {
+        public String type = "performance";
+        public PerformanceMetrics metrics;
+        
+        public PerformanceMessage(PerformanceMetrics metrics) {
+            this.metrics = metrics;
+        }
+        
+        public String getType() { return type; }
+        public PerformanceMetrics getMetrics() { return metrics; }
     }
 }

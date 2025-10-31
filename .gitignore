@@ -35,3 +35,26 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### OS ###
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+### JavaCV/FFmpeg temporary files ###
+*.mp4
+*.avi
+*.mkv
+*.ts
+*.h264
+
+### Environment-specific configs ###
+application-local.properties
+application-dev.properties
+
+### Temporary files ###
+*.tmp
+*.temp
+*.bak

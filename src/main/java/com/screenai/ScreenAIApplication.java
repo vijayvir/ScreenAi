@@ -64,13 +64,13 @@ public class ScreenAIApplication implements CommandLineRunner {
 		
 		System.out.println("=================================");
 		
-		// Initialize and start screen capture automatically
+		// Initialize screen capture (but don't auto-start)
 		try {
 			screenCaptureService.initialize();
 			if (screenCaptureService.isInitialized()) {
-				screenCaptureService.startCapture();
-				System.out.println("Screen capture started successfully!");
+				System.out.println("Screen capture initialized successfully!");
 				System.out.println("Capture method: " + screenCaptureService.getCaptureMethod());
+				System.out.println("Ready to start capture when requested via API");
 			} else {
 				System.out.println("Warning: Screen capture could not be initialized");
 			}
