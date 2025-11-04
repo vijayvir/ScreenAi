@@ -3,34 +3,28 @@ package com.screenai.model;
 import java.time.LocalDateTime;
 
 /**
- * Data model class to store session information for screen sharing
+ * Data model class to store viewer session information
  * 
- * This class represents a single screen sharing session and contains:
- * - sessionId: Unique identifier for the session (UUID format)
- * - token: Short-lived authentication token for secure access
- * - expiryTime: When this session expires (for security)
+ * This class represents a viewer session that has joined a screen sharing session.
+ * It contains:
+ * - sessionId: The unique session identifier that links to the host session
+ * - expiryTime: When this viewer session expires (for security)
  * 
- * This is used in Phase-1 to store session data in memory using HashMap
+ * This is used in Phase-2 to store viewer sessions in memory using HashMap
  * before implementing database storage in later phases.
  */
-public class SessionInfo {
+public class ViewerSession {
     
     /**
      * Unique session identifier
+     * This links the viewer to the host's screen sharing session
      * Generated as UUID to ensure uniqueness across all sessions
      */
     private String sessionId;
     
     /**
-     * Short-lived authentication token
-     * Used for secure access validation (will be JWT in future phases)
-     * For now, it's a random secure string
-     */
-    private String token;
-    
-    /**
-     * Session expiry time
-     * When this session becomes invalid for security purposes
+     * Viewer session expiry time
+     * When this viewer session becomes invalid for security purposes
      * Stored as LocalDateTime for easy comparison and cleanup
      */
     private LocalDateTime expiryTime;
@@ -39,20 +33,18 @@ public class SessionInfo {
      * Default constructor
      * Required for Spring Boot JSON serialization/deserialization
      */
-    public SessionInfo() {
+    public ViewerSession() {
         // Empty constructor for Spring Boot
     }
     
     /**
-     * Constructor to create a new session with all required information
+     * Constructor to create a new viewer session with all required information
      * 
-     * @param sessionId Unique identifier for this session
-     * @param token Authentication token for this session
-     * @param expiryTime When this session expires
+     * @param sessionId Unique identifier for the session (links to host session)
+     * @param expiryTime When this viewer session expires
      */
-    public SessionInfo(String sessionId, String token, LocalDateTime expiryTime) {
+    public ViewerSession(String sessionId, LocalDateTime expiryTime) {
         this.sessionId = sessionId;
-        this.token = token;
         this.expiryTime = expiryTime;
     }
     
@@ -73,23 +65,7 @@ public class SessionInfo {
     }
     
     /**
-     * Get the authentication token for this session
-     * @return Token as String
-     */
-    public String getToken() {
-        return token;
-    }
-    
-    /**
-     * Set the authentication token for this session
-     * @param token The token to set
-     */
-    public void setToken(String token) {
-        this.token = token;
-    }
-    
-    /**
-     * Get when this session expires
+     * Get when this viewer session expires
      * @return Expiry time as LocalDateTime
      */
     public LocalDateTime getExpiryTime() {
@@ -97,7 +73,7 @@ public class SessionInfo {
     }
     
     /**
-     * Set when this session expires
+     * Set when this viewer session expires
      * @param expiryTime The expiry time to set
      */
     public void setExpiryTime(LocalDateTime expiryTime) {
@@ -105,7 +81,7 @@ public class SessionInfo {
     }
     
     /**
-     * Check if this session has expired
+     * Check if this viewer session has expired
      * Compares current time with expiry time
      * @return true if session has expired, false otherwise
      */
@@ -114,15 +90,14 @@ public class SessionInfo {
     }
     
     /**
-     * Get a string representation of this session
+     * Get a string representation of this viewer session
      * Useful for debugging and logging
-     * @return String representation of SessionInfo
+     * @return String representation of ViewerSession
      */
     @Override
     public String toString() {
-        return "SessionInfo{" +
+        return "ViewerSession{" +
                 "sessionId='" + sessionId + '\'' +
-                ", token='" + token + '\'' +
                 ", expiryTime=" + expiryTime +
                 '}';
     }
