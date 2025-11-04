@@ -227,58 +227,79 @@
            background: linear-gradient(135deg, #8BC34A 0%, #689F38 100%);
        }
       
-       /* 🕒 Stream Timestamp Styles */
+       /* 🕒 Stream Timestamp Styles - Top Left Corner */
        .stream-timestamp {
-           display: inline-block !important;
-           margin-right: 20px;
+           position: fixed;
+           top: 20px;
+           left: 20px;
+           display: none;
            padding: 12px 16px;
            background: rgba(0, 0, 0, 0.85);
            border-radius: 8px;
            color: white;
            font-family: 'Courier New', monospace;
            font-size: 12px;
-           line-height: 1.2;
-           border: 1px solid rgba(139, 195, 74, 0.6);
-           backdrop-filter: blur(5px);
-           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-           min-width: 160px;
-           position: relative;
+           line-height: 1.6;
+           border: 1px solid rgba(139, 195, 74, 0.4);
+           backdrop-filter: blur(10px);
+           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+           min-width: 180px;
+           z-index: 1000;
        }
 
+       .stream-timestamp.show {
+           display: block;
+       }
 
        .stream-timestamp-row {
            display: flex;
            align-items: center;
-           gap: 8px;
-           margin: 3px 0;
+           justify-content: space-between;
+           gap: 12px;
+           margin: 6px 0;
        }
-
 
        .stream-timestamp-label {
-           font-size: 10px;
+           font-size: 11px;
            opacity: 0.8;
-           min-width: 45px;
            color: #ccc;
+           min-width: 70px;
        }
-
 
        .stream-timestamp-value {
            color: #8BC34A;
            font-weight: bold;
-           font-size: 12px;
+           font-size: 13px;
+           text-align: right;
        }
-
 
        .stream-timestamp-value.elapsed {
            color: #FF9800;
-           font-size: 13px;
+           font-size: 14px;
            font-weight: bold;
            animation: pulse 2s ease-in-out infinite;
+       }
+
+       /* ⏱️ Countdown Timer Styles */
+       .stream-timestamp-value.countdown {
+           color: #2196F3;
+           font-size: 16px;
+           font-weight: bold;
+       }
+
+       .stream-timestamp-value.countdown.warning {
+           color: #FF9800;
+           animation: pulse 1s ease-in-out infinite;
+       }
+
+       .stream-timestamp-value.countdown.critical {
+           color: #F44336;
+           animation: pulse 0.5s ease-in-out infinite;
        }
       
        @keyframes pulse {
            0%, 100% { opacity: 1; }
-           50% { opacity: 0.7; }
+           50% { opacity: 0.6; }
        }
       
        /* Button Styles */
@@ -510,25 +531,31 @@
   
    <!-- Stream Viewer -->
    <div id="streamViewer" class="stream-viewer">
-       <video id="videoView" autoplay muted playsinline></video>   <!-- Stream Controls with Timestamp -->
-   <div id="streamControls" class="stream-controls">
-       <!-- 🕒 Compact Stream Timestamp -->
+       <video id="videoView" autoplay muted playsinline></video>
+       
+       <!-- ⏱️ Stream Timer - Top Right Corner -->
        <div id="streamTimestamp" class="stream-timestamp">
            <div class="stream-timestamp-row">
-               <span class="stream-timestamp-label">Started:</span>
+               <span class="stream-timestamp-label">🚀 Started:</span>
                <span id="compactStartTime" class="stream-timestamp-value">--:--:--</span>
            </div>
            <div class="stream-timestamp-row">
-               <span class="stream-timestamp-label">Elapsed:</span>
+               <span class="stream-timestamp-label">⏱️ Elapsed:</span>
                <span id="compactElapsedTime" class="stream-timestamp-value elapsed">00:00:00</span>
            </div>
+           <div class="stream-timestamp-row">
+               <span class="stream-timestamp-label">⏳ Remaining:</span>
+               <span id="compactCountdown" class="stream-timestamp-value countdown">01:00:00</span>
+           </div>
        </div>
-      
-       <button id="stopBtn" class="btn btn-danger">
-           <span id="stopBtnText">🛑 Stop Streaming</span>
-           <span id="stopLoading" class="loading hidden">⏳</span>
-       </button>
-   </div>
+       
+       <!-- Stream Controls - Bottom Center -->
+       <div id="streamControls" class="stream-controls">
+           <button id="stopBtn" class="btn btn-danger">
+               <span id="stopBtnText">🛑 Stop Streaming</span>
+               <span id="stopLoading" class="loading hidden">⏳</span>
+           </button>
+       </div>
    </div>
   
    <!-- Error Display -->
@@ -588,6 +615,16 @@
                this.isSourceBufferUpdating = false;
                this.incompleteChunk = null; // Buffer for incomplete fMP4 boxes
               
+               // 🕒 Timestamp tracking
+               this.startTime = null;
+               this.stopTime = null;
+               this.elapsedTimer = null;
+               this.countdownTimer = null; // ⏱️ Countdown timer
+              
+               // ⏱️ Session duration limit (1 hour = 3600 seconds)
+               this.sessionDurationLimit = 3600; // 1 hour in seconds
+               this.sessionTimeRemaining = this.sessionDurationLimit;
+              
                // Page elements
                this.controlPanel = document.getElementById('controlPanel');
                this.streamViewer = document.getElementById('streamViewer');
@@ -603,17 +640,12 @@
                this.statusText = document.getElementById('statusText');
                this.activeViewers = document.getElementById('activeViewers');
               
-               // 🕒 Timestamp tracking
-               this.startTime = null;
-               this.stopTime = null;
-               this.elapsedTimer = null;
-               this.isStreaming = false;
-              
                // Timestamp elements
                this.streamControls = document.getElementById('streamControls');
                this.streamTimestamp = document.getElementById('streamTimestamp');
                this.compactStartTime = document.getElementById('compactStartTime');
                this.compactElapsedTime = document.getElementById('compactElapsedTime');
+               this.compactCountdown = document.getElementById('compactCountdown');
                this.stopBtn = document.getElementById('stopBtn');
               
                // Session results elements
@@ -794,7 +826,7 @@
               
                // Show stream controls and timestamp
                this.streamControls.classList.add('show');
-               this.streamTimestamp.style.display = 'inline-block';
+               this.streamTimestamp.classList.add('show');
                this.stopBtn.style.display = 'inline-block';
               
                // Update start time
@@ -805,6 +837,9 @@
               
                // Start elapsed timer
                this.startElapsedTimer();
+              
+               // ⏱️ Start countdown timer (1 hour limit)
+               this.startCountdownTimer();
               
                console.log('🕒 Session started at:', this.formatDateTime(this.startTime));
                console.log('🕒 Stream controls visible:', this.streamControls.classList.contains('show'));
@@ -821,9 +856,15 @@
                    this.elapsedTimer = null;
                }
               
+               // ⏱️ Stop countdown timer
+               if (this.countdownTimer) {
+                   clearInterval(this.countdownTimer);
+                   this.countdownTimer = null;
+               }
+              
                // Hide stream controls
                this.streamControls.classList.remove('show');
-               this.streamTimestamp.style.display = 'none';
+               this.streamTimestamp.classList.remove('show');
                this.stopBtn.style.display = 'none';
               
                // Show session results on home screen
@@ -842,6 +883,84 @@
                }, 1000); // Update every second
            }
           
+           // ⏱️ Countdown Timer (1 hour session limit with auto-stop)
+           startCountdownTimer() {
+               // Reset countdown
+               this.sessionTimeRemaining = this.sessionDurationLimit;
+               this.updateCountdownDisplay();
+              
+               this.countdownTimer = setInterval(() => {
+                   if (this.isStreaming && this.sessionTimeRemaining > 0) {
+                       this.sessionTimeRemaining--;
+                       this.updateCountdownDisplay();
+                      
+                       // Console warnings at key milestones
+                       if (this.sessionTimeRemaining === 600) { // 10 minutes
+                           console.warn('⏰ 10 minutes remaining until auto-stop');
+                       } else if (this.sessionTimeRemaining === 300) { // 5 minutes
+                           console.warn('⏰ 5 minutes remaining until auto-stop');
+                       } else if (this.sessionTimeRemaining === 60) { // 1 minute
+                           console.warn('⏰ 1 minute remaining until auto-stop');
+                       }
+                      
+                       // Auto-stop when timer reaches 0
+                       if (this.sessionTimeRemaining === 0) {
+                           console.warn('⏰ Session time limit reached - Auto-stopping stream');
+                           this.autoStopStream();
+                       }
+                   }
+               }, 1000); // Update every second
+           }
+          
+           updateCountdownDisplay() {
+               const countdownElement = this.compactCountdown;
+               countdownElement.textContent = this.formatDuration(this.sessionTimeRemaining * 1000);
+              
+               // Visual warnings based on time remaining
+               countdownElement.classList.remove('warning', 'critical');
+              
+               if (this.sessionTimeRemaining <= 60) { // ≤ 1 minute - Critical (red)
+                   countdownElement.classList.add('critical');
+               } else if (this.sessionTimeRemaining <= 300) { // ≤ 5 minutes - Warning (orange)
+                   countdownElement.classList.add('warning');
+               }
+               // else - Normal (blue) - default
+           }
+          
+           // Auto-stop stream when countdown reaches 0
+           async autoStopStream() {
+               console.log('🛑 Auto-stopping stream after 1 hour session limit...');
+               this.intentionalStop = true;
+               this.autoStopped = true; // Flag to show in session results
+              
+               try {
+                   // Call API to stop capture
+                   const response = await fetch('/api/stop-capture');
+                   const result = await response.json();
+                  
+                   if (result.success) {
+                       console.log('✅ Auto-stop completed successfully');
+                       this.finalizeTimestamps();
+                       this.cleanupVideoStreaming();
+                      
+                       if (this.socket) {
+                           this.socket.close();
+                           this.socket = null;
+                       }
+                      
+                       this.showControlPanel();
+                       this.isStreaming = false;
+                   }
+               } catch (error) {
+                   console.error('❌ Auto-stop error:', error);
+                   this.finalizeTimestamps();
+               } finally {
+                   setTimeout(() => {
+                       this.intentionalStop = false;
+                   }, 100);
+               }
+           }
+          
            showSessionResults() {
                if (!this.startTime || !this.stopTime) return;
               
@@ -856,6 +975,16 @@
                // Show session results
                this.sessionResults.style.display = 'block';
               
+               // Update title if auto-stopped
+               const titleElement = this.sessionResults.querySelector('h3');
+               if (this.autoStopped) {
+                   titleElement.textContent = '⏰ Session Auto-Stopped (1 Hour Limit)';
+                   titleElement.style.color = '#FF9800';
+               } else {
+                   titleElement.textContent = '📊 Session Completed';
+                   titleElement.style.color = '#8BC34A';
+               }
+              
                // Log detailed summary to console
                console.log('📊 Complete Session Summary:', {
                    startTime: this.formatDateTime(this.startTime),
@@ -863,6 +992,7 @@
                    duration: this.formatDuration(duration),
                    durationMs: duration,
                    date: this.formatDate(this.startTime),
+                   autoStopped: this.autoStopped || false,
                    userAgent: navigator.userAgent,
                    timestamp: new Date().toISOString()
                });
@@ -891,19 +1021,31 @@
                this.startTime = null;
                this.stopTime = null;
                this.isStreaming = false;
+               this.autoStopped = false; // Reset auto-stop flag
               
                if (this.elapsedTimer) {
                    clearInterval(this.elapsedTimer);
                    this.elapsedTimer = null;
                }
               
+               // ⏱️ Stop countdown timer
+               if (this.countdownTimer) {
+                   clearInterval(this.countdownTimer);
+                   this.countdownTimer = null;
+               }
+              
+               // Reset countdown time
+               this.sessionTimeRemaining = this.sessionDurationLimit;
+              
                // Reset display values
                this.compactStartTime.textContent = '--:--:--';
                this.compactElapsedTime.textContent = '00:00:00';
+               this.compactCountdown.textContent = '01:00:00';
+               this.compactCountdown.classList.remove('warning', 'critical');
               
                // Hide elements
                this.streamControls.classList.remove('show');
-               this.streamTimestamp.style.display = 'none';
+               this.streamTimestamp.classList.remove('show');
                this.stopBtn.style.display = 'none';
                this.sessionResults.style.display = 'none';
            }
