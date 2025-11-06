@@ -1764,6 +1764,18 @@
                        console.log('Server acknowledged connection');
                        break;
                    
+                   case 'ping':
+                       // 🏓 Respond to ping with pong for network quality measurement
+                       if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                           const pongMessage = {
+                               type: 'pong',
+                               timestamp: message.timestamp
+                           };
+                           this.socket.send(JSON.stringify(pongMessage));
+                           console.log('🏓 Pong sent in response to ping');
+                       }
+                       break;
+                   
                    case 'viewerCount':
                        // Update active viewers count
                        if (this.activeViewers && message.count !== undefined) {

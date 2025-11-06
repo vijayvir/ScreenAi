@@ -3,21 +3,15 @@ package com.screenai.service;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
-import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
-import javax.imageio.stream.ImageOutputStream;
-
 import static org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_YUV420P;
+
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.FFmpegFrameRecorder;
 import org.bytedeco.javacv.Frame;
@@ -30,6 +24,7 @@ import org.springframework.stereotype.Service;
 import com.screenai.encoder.VideoEncoderFactory;
 import com.screenai.encoder.VideoEncoderStrategy;
 import com.screenai.handler.ScreenShareWebSocketHandler;
+import com.screenai.model.StreamingParameters;
 
 /**
  * Service for capturing the screen using JavaCV and streaming via WebSockets
@@ -41,7 +36,6 @@ public class ScreenCaptureService {
 
     private VideoEncoderStrategy currentEncoder;
     private int consecutiveFrameSkips = 0;
-    private long lastFrameTime = 0;
     private static final int FRAME_RATE = 15; // 15 FPS for optimal balance
 
     @Autowired
@@ -49,6 +43,11 @@ public class ScreenCaptureService {
 
     @Autowired
     private PerformanceMonitorService performanceMonitor;
+    
+    // 🎚️ Dynamic streaming parameters for adaptive quality
+    private volatile int currentFrameRate = 15;
+    private volatile int currentBitrate = 2000000;  // 2 Mbps default
+    private volatile double currentResolutionScale = 1.0;
 
     // Configuration parameters
     @Value("${screen.capture.frame-rate:15}")
@@ -235,10 +234,10 @@ public class ScreenCaptureService {
                     (int) (currentEncoder.getCpuReduction() * 100));
 
             recorder.setFormat("mp4");
-            recorder.setFrameRate(FRAME_RATE);
+            recorder.setFrameRate(currentFrameRate);  // 🎚️ Use dynamic frame rate
             recorder.setPixelFormat(AV_PIX_FMT_YUV420P);
-            recorder.setVideoBitrate(2000000);
-            recorder.setGopSize(FRAME_RATE);
+            recorder.setVideoBitrate(currentBitrate);  // 🎚️ Use dynamic bitrate
+            recorder.setGopSize(currentFrameRate);
 
             // ✅ fMP4 container options for MediaSource
             recorder.setOption("movflags", "frag_keyframe+empty_moov+default_base_moof");
@@ -248,8 +247,8 @@ public class ScreenCaptureService {
             recorder.start();
             recorderStarted = true;
 
-            logger.info("✅ H.264 fMP4 encoder started: {}x{} @ {}fps ({})",
-                    targetWidth, targetHeight, FRAME_RATE, codecName);
+            logger.info("✅ H.264 fMP4 encoder started: {}x{} @ {}fps, {} kbps ({})",
+                    targetWidth, targetHeight, currentFrameRate, currentBitrate/1000, codecName);
 
             // ✅ Wait for init segment to be written
             Thread.sleep(200);
@@ -289,7 +288,7 @@ public class ScreenCaptureService {
 
         scheduler = Executors.newScheduledThreadPool(1);
 
-        final long frameIntervalMs = 1000 / FRAME_RATE;
+        final long frameIntervalMs = 1000 / currentFrameRate;  // 🎚️ Use dynamic frame rate
 
         scheduler.scheduleAtFixedRate(() -> {
             try {
@@ -321,7 +320,6 @@ public class ScreenCaptureService {
 
                     // Reset consecutive frame skip counter
                     consecutiveFrameSkips = 0;
-                    lastFrameTime = System.currentTimeMillis();
                 } else {
                     // ✅ Track dropped frames
                     consecutiveFrameSkips++;
@@ -338,7 +336,7 @@ public class ScreenCaptureService {
 
         }, 0, frameIntervalMs, TimeUnit.MILLISECONDS);
 
-        logger.info("🎬 H.264 streaming started at {} FPS", FRAME_RATE);
+        logger.info("🎬 H.264 streaming started at {} FPS, {} kbps", currentFrameRate, currentBitrate/1000);
 
     }
 
@@ -494,42 +492,6 @@ public class ScreenCaptureService {
     }
 
     /**
-     * Writes a BufferedImage as JPEG with specified quality
-     * 
-     * @param image        The image to write
-     * @param outputStream The output stream to write to
-     * @param quality      The JPEG quality (0.0 to 1.0)
-     * @return true if successful, false otherwise
-     */
-    private boolean writeJPEGWithQuality(BufferedImage image, ByteArrayOutputStream outputStream, float quality) {
-        try {
-            Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");
-            if (!writers.hasNext()) {
-                logger.warn("No JPEG writers available");
-                return false;
-            }
-
-            ImageWriter writer = writers.next();
-            ImageWriteParam param = writer.getDefaultWriteParam();
-
-            if (param.canWriteCompressed()) {
-                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-                param.setCompressionQuality(quality);
-            }
-
-            try (ImageOutputStream ios = ImageIO.createImageOutputStream(outputStream)) {
-                writer.setOutput(ios);
-                writer.write(null, new javax.imageio.IIOImage(image, null, null), param);
-                writer.dispose();
-                return true;
-            }
-        } catch (IOException e) {
-            logger.error("Error writing JPEG with quality: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    /**
      * Cleanup resources when service is destroyed
      */
     public void cleanup() {
@@ -665,5 +627,223 @@ public class ScreenCaptureService {
      */
     public Rectangle getScreenBounds() {
         return screenRect;
+    }
+    
+    // ============================================================================
+    // 🎚️ ADAPTIVE STREAMING METHODS
+    // ============================================================================
+    
+    /**
+     * Update streaming parameters dynamically based on network quality
+     * This is called by AdaptiveStreamingService to adjust quality in real-time
+     * 
+     * @param params New streaming parameters (bitrate, framerate, resolution)
+     * @return true if update was successful
+     */
+    public boolean updateStreamingParameters(StreamingParameters params) {
+        if (!isCapturing) {
+            logger.warn("⚠️ Cannot update parameters - capture not active");
+            return false;
+        }
+        
+        try {
+            boolean needsRecorderRestart = false;
+            boolean needsSchedulerRestart = false;
+            
+            // Check what needs to change
+            if (params.getBitrate() != currentBitrate) {
+                logger.info("🎚️ Bitrate: {} kbps → {} kbps", 
+                           currentBitrate / 1000, params.getBitrateKbps());
+                needsRecorderRestart = true;
+            }
+            
+            if (params.getFrameRate() != currentFrameRate) {
+                logger.info("🎚️ Frame Rate: {} fps → {} fps", 
+                           currentFrameRate, params.getFrameRate());
+                needsSchedulerRestart = true;
+            }
+            
+            if (Math.abs(params.getResolutionScale() - currentResolutionScale) > 0.01) {
+                logger.info("🎚️ Resolution Scale: {:.2f} → {:.2f}", 
+                           currentResolutionScale, params.getResolutionScale());
+                needsRecorderRestart = true;
+            }
+            
+            // Update current values
+            currentBitrate = params.getBitrate();
+            currentFrameRate = params.getFrameRate();
+            currentResolutionScale = params.getResolutionScale();
+            
+            // Apply changes
+            if (needsRecorderRestart) {
+                restartRecorderWithNewParameters();
+            } else if (needsSchedulerRestart) {
+                restartSchedulerWithNewFrameRate();
+            }
+            
+            logger.info("✅ Streaming parameters updated successfully");
+            return true;
+            
+        } catch (Exception e) {
+            logger.error("❌ Failed to update streaming parameters: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+    
+    /**
+     * Restart the recorder with new bitrate/resolution settings
+     * This causes a brief interruption but maintains connection
+     */
+    private void restartRecorderWithNewParameters() {
+        logger.info("🔄 Restarting recorder with new parameters...");
+        
+        try {
+            // Stop current recorder
+            if (recorder != null && recorderStarted) {
+                recorder.stop();
+                recorder.release();
+                recorderStarted = false;
+            }
+            
+            // Reinitialize with new parameters
+            boolean success = initializeVideoRecorderWithDynamicParams();
+            
+            if (success) {
+                logger.info("✅ Recorder restarted successfully");
+            } else {
+                logger.error("❌ Failed to restart recorder");
+            }
+            
+        } catch (Exception e) {
+            logger.error("❌ Error restarting recorder: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Restart the capture scheduler with new frame rate
+     * Changes how often frames are captured
+     */
+    private void restartSchedulerWithNewFrameRate() {
+        logger.info("🔄 Restarting scheduler with new frame rate: {} fps", currentFrameRate);
+        
+        try {
+            // Stop current scheduler
+            if (scheduler != null && !scheduler.isShutdown()) {
+                scheduler.shutdown();
+                scheduler.awaitTermination(1, TimeUnit.SECONDS);
+            }
+            
+            // Create new scheduler with updated frame rate
+            scheduler = Executors.newScheduledThreadPool(1);
+            final long frameIntervalMs = 1000 / currentFrameRate;
+            
+            // Restart capture loop
+            scheduler.scheduleAtFixedRate(() -> {
+                try {
+                    long captureStartTime = System.currentTimeMillis();
+                    
+                    Frame frame = frameGrabber.grabImage();
+                    if (frame != null && frame.image != null) {
+                        performanceMonitor.recordFrameCapture();
+                        
+                        if (frame.timestamp > 0) {
+                            try {
+                                recorder.setTimestamp(frame.timestamp);
+                            } catch (Exception ignore) {}
+                        }
+                        
+                        recorder.record(frame);
+                        sendIncrementalData();
+                        
+                        long latency = System.currentTimeMillis() - captureStartTime;
+                        performanceMonitor.recordLatency(latency);
+                        
+                        consecutiveFrameSkips = 0;
+                    } else {
+                        consecutiveFrameSkips++;
+                        performanceMonitor.recordDroppedFrame();
+                        
+                        if (consecutiveFrameSkips > 5) {
+                            logger.warn("⚠️ {} consecutive frames dropped", consecutiveFrameSkips);
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.error("Error during screen capture: {}", e.getMessage());
+                    performanceMonitor.recordDroppedFrame();
+                }
+            }, 0, frameIntervalMs, TimeUnit.MILLISECONDS);
+            
+            logger.info("✅ Scheduler restarted successfully");
+            
+        } catch (Exception e) {
+            logger.error("❌ Error restarting scheduler: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Initialize recorder with current dynamic parameters
+     * Used when restarting encoder with new settings
+     */
+    private boolean initializeVideoRecorderWithDynamicParams() {
+        try {
+            // Clean up previous stream
+            if (videoStream != null) {
+                try {
+                    videoStream.close();
+                } catch (IOException ignored) {}
+            }
+            
+            videoStream = new ByteArrayOutputStream();
+            lastSentPosition = 0;
+            initSegment = null;
+            recorderStarted = false;
+            
+            // Calculate resolution with scale
+            int targetWidth = (int) (screenRect.width * currentResolutionScale);
+            int targetHeight = (int) (screenRect.height * currentResolutionScale);
+            
+            recorder = new FFmpegFrameRecorder(videoStream, targetWidth, targetHeight);
+            
+            // Use existing encoder
+            if (currentEncoder == null) {
+                currentEncoder = VideoEncoderFactory.getBestEncoder();
+            }
+            currentEncoder.configure(recorder);
+            
+            recorder.setFormat("mp4");
+            recorder.setFrameRate(currentFrameRate);  // Use dynamic frame rate
+            recorder.setPixelFormat(AV_PIX_FMT_YUV420P);
+            recorder.setVideoBitrate(currentBitrate);  // Use dynamic bitrate
+            recorder.setGopSize(currentFrameRate);
+            
+            // fMP4 container options
+            recorder.setOption("movflags", "frag_keyframe+empty_moov+default_base_moof");
+            recorder.setOption("flush_packets", "1");
+            recorder.setOption("min_frag_duration", String.valueOf(1000000 / currentFrameRate));
+            
+            recorder.start();
+            recorderStarted = true;
+            
+            logger.info("✅ H.264 encoder restarted: {}x{} @ {}fps, {} kbps",
+                       targetWidth, targetHeight, currentFrameRate, currentBitrate / 1000);
+            
+            // Wait for init segment
+            Thread.sleep(200);
+            extractInitSegment();
+            
+            return true;
+            
+        } catch (Exception e) {
+            logger.error("❌ Failed to initialize recorder with dynamic params: {}", e.getMessage(), e);
+            recorderStarted = false;
+            return false;
+        }
+    }
+    
+    /**
+     * Get current streaming parameters (for monitoring/debugging)
+     */
+    public StreamingParameters getCurrentStreamingParameters() {
+        return new StreamingParameters(currentBitrate, currentFrameRate, currentResolutionScale);
     }
 }

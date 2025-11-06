@@ -29,7 +29,9 @@ public class ScreenShareWebSocketHandler implements WebSocketHandler, Performanc
 
     private static final Logger logger = LoggerFactory.getLogger(ScreenShareWebSocketHandler.class);
     private final CopyOnWriteArraySet<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    @Autowired
+    private ObjectMapper objectMapper;  // Use Spring-configured ObjectMapper with JSR310 support
 
     @Lazy
     @Autowired
@@ -309,6 +311,22 @@ public class ScreenShareWebSocketHandler implements WebSocketHandler, Performanc
         return pingCount;
     }
 
+    /**
+     * Automatic periodic ping to measure network quality
+     * Runs every 5 seconds to collect latency data
+     */
+    @Scheduled(fixedRate = 5000) // Every 5 seconds
+    public void sendPeriodicPings() {
+        if (sessions.isEmpty()) {
+            return; // No sessions to ping
+        }
+        
+        int pingCount = triggerPingForAllSessions();
+        if (pingCount > 0) {
+            logger.debug("🏓 Auto-ping sent to {} session(s) for network quality measurement", pingCount);
+        }
+    }
+    
     /**
      * Periodic cleanup of stale sessions
      * Runs every minute to remove closed or timed-out sessions
