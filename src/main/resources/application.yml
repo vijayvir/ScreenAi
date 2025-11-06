@@ -30,3 +30,29 @@ logging:
     name: logs/screenai.log
     max-size: 10MB
     max-history: 5
+
+# Network Quality & Adaptive Streaming Configuration
+screenai:
+  network:
+    quality:
+      # Latency thresholds in milliseconds
+      excellent-threshold: 50.0
+      good-threshold: 100.0
+      fair-threshold: 200.0
+      # Ping interval for quality assessment
+      ping-interval: 5000
+  adaptive:
+    # Assessment and adaptation settings
+    assessment-interval: 10000  # 10 seconds
+    enabled: true
+    # Bitrate settings (kbps)
+    bitrate:
+      max: 2000
+      min: 500
+    # Frame rate settings
+    framerate:
+      max: 30
+      min: 10
+    # Resolution scaling
+    resolution:
+      scale-down: 0.75
