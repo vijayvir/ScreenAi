@@ -12,17 +12,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 import com.screenai.service.ScreenCaptureService;
 
-/**
- * Main application class for ScreenAI
- * 
- * This application provides real-time screen sharing capabilities using:
- * - Spring Boot for the web framework
- * - WebSockets for real-time communication
- * - JavaCV for cross-platform screen capture
- * - Thymeleaf for the web interface
- * 
- * The application is cross-platform compatible and works on Windows, macOS, and Linux.
- */
+
+ // Main application class for ScreenAI
+ 
 @SpringBootApplication
 @EnableScheduling
 public class ScreenAIApplication implements CommandLineRunner {

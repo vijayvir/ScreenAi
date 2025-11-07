@@ -11,63 +11,19 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.screenai.service.AccessCodeService;
 
-/**
- * REST Controller for handling access code operations
- * 
- * This controller provides REST API endpoints for the screen sharing application.
- * It handles HTTP requests and responses, delegating business logic to services.
- * 
- * Key responsibilities:
- * - Expose REST endpoints for frontend communication
- * - Handle HTTP request/response mapping
- * - Validate requests and return appropriate responses
- * - Delegate business logic to service layer
- * 
- * Phase-1 (Host): /api/start endpoint for session creation
- * Phase-2 (Viewer): /api/join endpoint for viewer joining
- * 
- * This is a Spring REST Controller, meaning Spring will automatically
- * register these endpoints and handle HTTP routing.
- */
+
+ // (Host): /api/start endpoint for session creation
+ // (Viewer): /api/join endpoint for viewer joining
+
 @RestController
 @RequestMapping("/api")
 public class AccessCodeController {
     
-    /**
-     * Service dependency injection
-     * 
-     * Spring automatically injects an instance of AccessCodeService
-     * when this controller is created. This is called "Dependency Injection"
-     * and is a core feature of Spring Framework.
-     */
+   
     @Autowired
     private AccessCodeService accessCodeService;
     
-    /**
-     * REST endpoint to start a new screen sharing session
-     * 
-     * This endpoint is called when a host clicks "Start Sharing" button.
-     * It triggers the creation of a new session with:
-     * - Random 6-digit access code
-     * - Unique session ID (UUID)
-     * - Short-lived authentication token
-     * - Session expiry time
-     * 
-     * HTTP Method: POST
-     * URL: /api/start
-     * 
-     * Request: No request body required (empty POST request)
-     * Response: JSON containing code, sessionId, and token
-     * 
-     * Example Response:
-     * {
-     *   "code": "123456",
-     *   "sessionId": "550e8400-e29b-41d4-a716-446655440000",
-     *   "token": "a1b2c3d4e5f6789012345678901234567890abcd"
-     * }
-     * 
-     * @return ResponseEntity containing the session data or error message
-     */
+   
     @PostMapping("/start")
     public ResponseEntity<Map<String, String>> startSharing() {
         try {
@@ -107,42 +63,14 @@ public class AccessCodeController {
         }
     }
     
-    /**
-     * REST endpoint to join a screen sharing session (Phase-2)
-     * 
-     * This endpoint is called when a viewer wants to join an existing session.
-     * It validates the access code and creates a viewer session.
-     * 
-     * HTTP Method: POST
-     * URL: /api/join
-     * 
-     * Request Body: JSON containing access code
-     * {
-     *   "code": "123456"
-     * }
-     * 
-     * Response (Success):
-     * {
-     *   "message": "Access granted",
-     *   "sessionId": "uuid-session-id",
-     *   "viewerToken": "random-generated-viewer-token"
-     * }
-     * 
-     * Response (Error):
-     * {
-     *   "error": "Invalid or expired access code"
-     * }
-     * 
-     * @param requestBody Map containing the access code
-     * @return ResponseEntity containing sessionId and viewerToken if valid, error otherwise
-     */
+   
     @PostMapping("/join")
     public ResponseEntity<Map<String, String>> joinSession(@RequestBody Map<String, String> requestBody) {
         try {
             // Log the request for debugging
             System.out.println("Received request to join screen sharing session");
             
-            // Step 1: Extract access code from request body
+            // Extract access code from request body
             String accessCode = requestBody != null ? requestBody.get("code") : null;
             
             if (accessCode == null || accessCode.trim().isEmpty()) {
@@ -153,24 +81,21 @@ public class AccessCodeController {
                 return ResponseEntity.badRequest().body(errorResponse);
             }
             
-            // Step 2: Call the service to validate code and create viewer session
-            // This will:
-            // 1. Validate if the access code exists and is not expired
-            // 2. Generate a unique viewer token
-            // 3. Store viewer session in HashMap
-            // 4. Return sessionId and viewerToken
+           
             Map<String, String> result = accessCodeService.joinSession(accessCode);
             
             if (result != null) {
-                // Step 3: Success - viewer joined successfully
+                //  Success - viewer joined successfully
                 System.out.println("Viewer successfully joined session:");
                 System.out.println("  Access Code: " + accessCode);
                 System.out.println("  Session ID: " + result.get("sessionId"));
                 System.out.println("  Viewer Token: " + result.get("viewerToken"));
+                System.out.println("  Host Created At: " + result.get("hostCreatedAt"));
+                System.out.println("  Viewer Joined At: " + result.get("viewerJoinedAt"));
                 
                 return ResponseEntity.ok(result);
             } else {
-                // Step 4: Failure - invalid or expired access code
+                // Failure - invalid or expired access code
                 System.err.println("Failed to join session - invalid or expired access code: " + accessCode);
                 Map<String, String> errorResponse = Map.of(
                     "error", "Invalid or expired access code"
@@ -191,18 +116,7 @@ public class AccessCodeController {
         }
     }
     
-    /**
-     * REST endpoint to validate an access code
-     * 
-     * This endpoint can be used to check if an access code is valid
-     * (not implemented in Phase-1, but prepared for future phases)
-     * 
-     * HTTP Method: POST
-     * URL: /api/validate
-     * 
-     * @param accessCode The 6-digit code to validate
-     * @return ResponseEntity indicating if the code is valid
-     */
+  /*/
     @PostMapping("/validate")
     public ResponseEntity<Map<String, Object>> validateAccessCode(String accessCode) {
         try {
@@ -244,17 +158,7 @@ public class AccessCodeController {
         }
     }
     
-    /**
-     * REST endpoint to get session statistics
-     * 
-     * This endpoint provides information about active sessions
-     * Useful for monitoring and debugging
-     * 
-     * HTTP Method: GET
-     * URL: /api/stats
-     * 
-     * @return ResponseEntity containing session statistics
-     */
+    
     @PostMapping("/stats")
     public ResponseEntity<Map<String, Object>> getSessionStats() {
         try {
@@ -278,5 +182,7 @@ public class AccessCodeController {
             );
             return ResponseEntity.internalServerError().body(errorResponse);
         }
-    }
+    }*/
+
+
 }

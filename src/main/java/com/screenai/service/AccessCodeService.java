@@ -19,14 +19,14 @@ import com.screenai.model.ViewerSession;
  * Service class responsible for managing access codes and session information
  * 
  * This service handles the core functionality for Phase-1 and Phase-2:
- * Phase-1 (Host):
+ *  (Host):
  * 1. Generates random 6-digit access codes
  * 2. Creates unique session IDs (UUID)
  * 3. Generates short-lived authentication tokens
  * 4. Stores session data in memory using HashMap
  * 5. Manages session expiry and cleanup
  * 
- * Phase-2 (Viewer):
+ * (Viewer):
  * 1. Validates access codes from viewers
  * 2. Creates viewer-specific tokens
  * 3. Maps viewer tokens to existing sessions
@@ -41,18 +41,14 @@ public class AccessCodeService {
     private static final Logger logger = LoggerFactory.getLogger(AccessCodeService.class);
     
     /**
-     * In-memory storage for access codes and their associated session information (Phase-1)
-     * 
+     * In-memory storage for access codes and their associated session information 
      * Key: 6-digit access code (String)
      * Value: SessionInfo object containing sessionId, token, and expiryTime
-     * 
-     * Using ConcurrentHashMap for thread safety since multiple users
-     * might access this simultaneously
      */
     private final Map<String, SessionInfo> sessionStorage = new ConcurrentHashMap<>();
     
     /**
-     * In-memory storage for viewer sessions (Phase-2)
+     * In-memory storage for viewer sessions 
      * 
      * Key: Viewer token (String)
      * Value: ViewerSession object containing sessionId and expiryTime
@@ -60,24 +56,22 @@ public class AccessCodeService {
      * This maps viewer tokens to host sessions, allowing viewers to join
      * Using ConcurrentHashMap for thread safety
      */
+
+
+
     private final Map<String, ViewerSession> viewerStorage = new ConcurrentHashMap<>();
     
-    /**
-     * Random number generator for creating access codes
-     * Using a single instance for better randomness distribution
-     */
-    private final Random random = new Random();
+    // Random number generator for creating access codes
+     private final Random random = new Random();
     
-    /**
-     * Default session duration in minutes
-     * Sessions expire after this time for security
-     */
+    
+     // Default session duration in minutes
+     // Sessions expire after this time for security
     private static final int SESSION_DURATION_MINUTES = 30;
     
-    /**
-     * Default viewer session duration in minutes
-     * Viewer sessions expire after this time for security
-     */
+    
+     // Default viewer session duration in minutes
+     // Viewer sessions expire after this time for security
     private static final int VIEWER_SESSION_DURATION_MINUTES = 30;
     
     /**
@@ -96,6 +90,10 @@ public class AccessCodeService {
     public Map<String, String> generateAccessCode() {
         // Step 1: Generate a random 6-digit access code
         String accessCode = generateSixDigitCode();
+        
+        // Format for the timestamp
+        java.time.format.DateTimeFormatter formatter = 
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         
         // Step 2: Create a unique session ID using UUID
         String sessionId = UUID.randomUUID().toString();
@@ -124,48 +122,34 @@ public class AccessCodeService {
         response.put("code", accessCode);
         response.put("sessionId", sessionId);
         response.put("token", token);
+        response.put("createdAt", sessionInfo.getCreatedAt().format(formatter));
         
         return response;
     }
     
-    /**
-     * Generates a random 6-digit access code
-     * 
-     * This method ensures the code is always exactly 6 digits
-     * and handles the edge case where random number might be less than 6 digits
-     * 
-     * @return 6-digit access code as String
-     */
+    
+     // Generates a random 6-digit access code
+     //retubn 6-digit access code as String
     private String generateSixDigitCode() {
         // Generate a random number between 100000 and 999999
-        // This ensures we always get exactly 6 digits
         int code = 100000 + random.nextInt(900000);
         return String.valueOf(code);
     }
     
-    /**
-     * Generates a secure authentication token
-     * 
-     * For Phase-1, this creates a random string token
-     * In future phases, this will be replaced with JWT tokens
-     * 
-     * @return Secure token as String
-     */
+    // Generates a secure random token using UUID
+     //return secure token as String
     private String generateSecureToken() {
+
         // Generate a random UUID and remove hyphens for a cleaner token
         // This creates a 32-character random string
         return UUID.randomUUID().toString().replace("-", "");
+
     }
     
-    /**
-     * Retrieves session information by access code
-     * 
-     * This method is used to validate access codes and get session details
-     * It also checks if the session has expired
-     * 
-     * @param accessCode The 6-digit code to look up
-     * @return SessionInfo if found and not expired, null otherwise
-     */
+ 
+     //This method is used to validate access codes and get session details
+     //It also checks if the session has expired
+     
     public SessionInfo getSessionByCode(String accessCode) {
         // Validate input parameter
         if (accessCode == null || accessCode.trim().isEmpty()) {
@@ -194,12 +178,10 @@ public class AccessCodeService {
         return session;
     }
     
-    /**
-     * Validates if an access code exists and is not expired
-     * 
-     * @param accessCode The code to validate
-     * @return true if code is valid and not expired, false otherwise
-     */
+  
+     //Validates if an access code exists and is not expired
+     // true if code is valid and not expired, false otherwise
+
     public boolean isValidAccessCode(String accessCode) {
         if (accessCode == null || accessCode.trim().isEmpty()) {
             logger.warn("Access code is null or empty for validation");
@@ -210,14 +192,8 @@ public class AccessCodeService {
         return session != null;
     }
     
-    /**
-     * Removes a session from storage
-     * 
-     * This can be called when a session ends or needs to be invalidated
-     * 
-     * @param accessCode The code of the session to remove
-     * @return true if session was removed, false if not found
-     */
+   
+     //This can be called when a session ends or needs to be invalidated
     public boolean removeSession(String accessCode) {
         if (accessCode == null || accessCode.trim().isEmpty()) {
             logger.warn("Access code is null or empty for removal");
@@ -232,23 +208,17 @@ public class AccessCodeService {
         return false;
     }
     
-    /**
-     * Gets the total number of active sessions
-     * 
-     * Useful for monitoring and debugging
-     * 
-     * @return Number of active sessions
-     */
+    
+     //Gets the total number of active sessions
+    
     public int getActiveSessionCount() {
         return sessionStorage.size();
     }
     
-    /**
-     * Cleans up expired sessions from storage
-     * 
-     * This method iterates through all sessions and removes expired ones
-     * Should be called periodically to prevent memory leaks
-     */
+
+     // Cleans up expired sessions from storage
+     //This method iterates through all sessions and removes expired ones
+     //Should be called periodically to prevent memory leaks
     public void cleanupExpiredSessions() {
         try {
             int removedCount = 0;
@@ -285,18 +255,15 @@ public class AccessCodeService {
         }
     }
     
-    /**
-     * Gets all active access codes (for debugging purposes)
-     * 
-     * @return Set of all active access codes
-     */
+    
+     // Gets all active access codes (for debugging purposes)
     public Map<String, SessionInfo> getAllSessions() {
         // Return a copy to prevent external modification
         return new HashMap<>(sessionStorage);
     }
     
     /**
-     * Phase-2: Allows a viewer to join a screen sharing session using an access code
+     *Allows a viewer to join a screen sharing session using an access code
      * 
      * This method handles viewer joining functionality:
      * 1. Validates the access code exists and is not expired
@@ -333,8 +300,8 @@ public class AccessCodeService {
         // Step 5: Calculate when this viewer session will expire
         LocalDateTime expiryTime = LocalDateTime.now().plus(VIEWER_SESSION_DURATION_MINUTES, ChronoUnit.MINUTES);
         
-        // Step 6: Create ViewerSession object with sessionId and expiry time
-        ViewerSession viewerSession = new ViewerSession(sessionId, expiryTime);
+        // Step 6: Create ViewerSession object with sessionId, expiry time, and host's creation time
+        ViewerSession viewerSession = new ViewerSession(sessionId, expiryTime, sessionInfo.getCreatedAt());
         
         // Step 7: Store the viewer session in the HashMap
         // Key = viewer token, Value = viewer session information
@@ -347,24 +314,25 @@ public class AccessCodeService {
         logger.info("  Viewer Token: {}", viewerToken);
         logger.info("  Expires at: {}", expiryTime);
         
-        // Step 9: Return the data that will be sent to the viewer
+        // Step 9: Format timestamps for the response
+        String hostCreatedAt = sessionInfo.getCreatedAt().toString().replace('T', ' ').substring(0, 19);
+        String viewerJoinedAt = viewerSession.getViewerJoinedAt().toString().replace('T', ' ').substring(0, 19);
+
+        // Step 10: Return the data that will be sent to the viewer, including timestamps
         Map<String, String> response = new HashMap<>();
         response.put("message", "Access granted");
         response.put("sessionId", sessionId);
         response.put("viewerToken", viewerToken);
+        response.put("hostCreatedAt", hostCreatedAt);
+        response.put("viewerJoinedAt", viewerJoinedAt);
         
         return response;
     }
     
-    /**
-     * Validates a viewer token and retrieves the associated sessionId
-     * 
-     * This method is used to verify that a viewer token is valid and not expired
-     * It also checks if the viewer session has expired
-     * 
-     * @param viewerToken The viewer token to validate
-     * @return SessionId if valid, null otherwise
-     */
+    
+   
+     //This method is used to verify that a viewer token is valid and not expired
+     //It also checks if the viewer session has expired
     public String validateViewerToken(String viewerToken) {
         // Validate input parameter
         if (viewerToken == null || viewerToken.trim().isEmpty()) {
@@ -393,12 +361,10 @@ public class AccessCodeService {
         return viewerSession.getSessionId();
     }
     
-    /**
-     * Cleanup expired viewer sessions from storage
-     * 
-     * This method iterates through all viewer sessions and removes expired ones
-     * Should be called periodically to prevent memory leaks
-     */
+   
+     // Cleanup expired viewer sessions from storage
+     //This method iterates through all viewer sessions and removes expired ones
+     //Should be called periodically to prevent memory leaks
     public void cleanupExpiredViewerSessions() {
         try {
             int removedCount = 0;
