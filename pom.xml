@@ -9,10 +9,10 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.screenai</groupId>
-	<artifactId>screenai</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
-	<name>ScreenAI</name>
-	<description>ScreenAI - Real-time screen sharing application</description>
+	<artifactId>screenai-server</artifactId>
+	<version>1.0.0</version>
+	<name>ScreenAI-Server</name>
+	<description>ScreenAI Server - Lightweight relay server for real-time screen sharing</description>
 	<properties>
 		<java.version>17</java.version>
 	</properties>
@@ -28,13 +28,6 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-thymeleaf</artifactId>
-		</dependency>
-		
-		<!-- JavaCV for screen capture -->
-		<dependency>
-			<groupId>org.bytedeco</groupId>
-			<artifactId>javacv-platform</artifactId>
-			<version>1.5.9</version>
 		</dependency>
 		
 		<!-- Jackson Java 8 Date/Time support -->

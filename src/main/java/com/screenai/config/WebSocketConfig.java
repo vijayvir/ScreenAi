@@ -5,20 +5,20 @@ import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 
-import com.screenai.handler.ScreenShareWebSocketHandler;
+import com.screenai.handler.ScreenShareRelayHandler;
 
 /**
  * WebSocket configuration class
- * Configures WebSocket endpoints for real-time screen sharing
+ * Configures WebSocket endpoints for real-time screen sharing RELAY
  */
 @Configuration
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
     
-    private final ScreenShareWebSocketHandler screenShareHandler;
+    private final ScreenShareRelayHandler relayHandler;
     
-    public WebSocketConfig(ScreenShareWebSocketHandler screenShareHandler) {
-        this.screenShareHandler = screenShareHandler;
+    public WebSocketConfig(ScreenShareRelayHandler relayHandler) {
+        this.relayHandler = relayHandler;
     }
     
     /**
@@ -27,8 +27,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
      */
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // Register the screen share handler for endpoint /screenshare
-        registry.addHandler(screenShareHandler, "/screenshare")
+        // Register the relay handler for endpoint /screenshare
+        registry.addHandler(relayHandler, "/screenshare")
                 .setAllowedOrigins("*");
     }
 }

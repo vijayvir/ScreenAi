@@ -15,6 +15,11 @@ spring:
     resources:
       cache:
         period: 3600 # 1 hour cache for static resources
+  # WebSocket configuration for large binary messages (video frames)
+  websocket:
+    message-size-limit: 10485760  # 10 MB
+    send-buffer-size: 10485760    # 10 MB
+    send-time-limit: 20000        # 20 seconds
 
 # Logging configuration
 logging:
