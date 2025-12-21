@@ -7,21 +7,21 @@ import java.util.Enumeration;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Main application class for ScreenAI-Server
  * 
- * This is a RELAY-ONLY server that forwards video streams from presenters to viewers.
+ * This is a RELAY-ONLY server using Spring WebFlux + Netty for high-performance
+ * non-blocking video streaming.
  * 
  * Features:
- * - Spring Boot for the web framework
- * - WebSockets for real-time binary data relay
+ * - Spring WebFlux for reactive web framework
+ * - Netty for non-blocking I/O
+ * - Reactive WebSockets for real-time binary data relay
  * - Room-based session management
- * - Performance monitoring
+ * - Automatic backpressure handling
  */
 @SpringBootApplication
-@EnableScheduling
 public class ScreenAIApplication implements CommandLineRunner {
 
 	public static void main(String[] args) {
@@ -31,9 +31,9 @@ public class ScreenAIApplication implements CommandLineRunner {
 	@Override
 	public void run(String... args) throws Exception {
 		// Print startup information after Spring Boot is fully initialized
-		System.out.println("═══════════════════════════════════════════════════════");
-		System.out.println("   ScreenAI-Server (Relay Mode) Started Successfully   ");
-		System.out.println("═══════════════════════════════════════════════════════");
+		System.out.println("═══════════════════════════════════════════════════════════");
+		System.out.println("   ScreenAI-Server (WebFlux + Netty) Started Successfully   ");
+		System.out.println("═══════════════════════════════════════════════════════════");
 		System.out.println("");
 		
 		// Show local access URL
@@ -53,18 +53,18 @@ public class ScreenAIApplication implements CommandLineRunner {
 		}
 		
 		System.out.println("");
-		System.out.println("🔧 Server Mode: RELAY ONLY");
+		System.out.println("� Server Mode: WebFlux + Netty (Non-Blocking)");
+		System.out.println("   ✅ Reactive WebSocket handling");
+		System.out.println("   ✅ Non-blocking I/O via Netty");
+		System.out.println("   ✅ Automatic backpressure handling");
+		System.out.println("   ✅ Binary data relay (no size limits)");
 		System.out.println("   ✅ Room management enabled");
-		System.out.println("   ✅ Binary data relay enabled");
-		System.out.println("   ✅ Performance monitoring enabled");
-		System.out.println("   ❌ Screen capture: Not available (client-side)");
-		System.out.println("   ❌ Video encoding: Not available (client-side)");
 		System.out.println("");
 		System.out.println("🧪 Test with wscat:");
 		System.out.println("   wscat -c ws://localhost:8080/screenshare");
 		System.out.println("   > {\"type\":\"create-room\",\"roomId\":\"test\"}");
 		System.out.println("");
-		System.out.println("═══════════════════════════════════════════════════════");
+		System.out.println("═══════════════════════════════════════════════════════════");
 	}
 	
 	/**

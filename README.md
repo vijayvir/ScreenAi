@@ -1,110 +1,64 @@
-# ScreenAI-Server - Lightweight WebSocket Relay Server
+# ScreenAI-Server
 
-A **lightweight, scalable relay server** for real-time screen sharing and video streaming. Built with **Spring Boot** and **WebSocket**, this server efficiently forwards H.264 video streams from presenters to multiple viewers.
+A **lightweight WebSocket relay server** for real-time screen sharing. Built with **Spring Boot WebFlux + Netty** for high-performance, non-blocking video streaming.
 
-## 🎯 What is ScreenAI-Server?
+## 🎯 Overview
 
-ScreenAI-Server is a **relay-only server** that acts as a central hub for video streaming:
+ScreenAI-Server acts as a relay hub between presenters (screen sharers) and viewers:
 
 ```
-Presenter Client          ScreenAI-Server         Viewer Clients
-(Captures & Encodes)      (Relays Only)          (Decode & Display)
-      │                         │                        │
-      │ H.264 video chunks     │                        │
-      │═══════════════════════►│                        │
-      │    (Binary WebSocket)  │  Relay to all viewers │
-      │                        │═══════════════════════►│
-      │                        │═══════════════════════►│
-      │                        │═══════════════════════►│
+┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
+│    Presenter    │         │  ScreenAI Server│         │     Viewers     │
+│  (Screen Share) │         │  (WebFlux+Netty)│         │   (Watch Feed)  │
+└────────┬────────┘         └────────┬────────┘         └────────┬────────┘
+         │                           │                           │
+         │  1. create-room           │                           │
+         │──────────────────────────►│                           │
+         │                           │                           │
+         │                           │  2. join-room             │
+         │                           │◄──────────────────────────│
+         │                           │                           │
+         │  3. Binary video frames   │  4. Relay to viewers      │
+         │══════════════════════════►│══════════════════════════►│
+         │      (H.264 fMP4)         │      (H.264 fMP4)         │
 ```
-
-### **🔑 Key Principle**
-- ✅ **Clients** handle CPU-intensive tasks (screen capture, H.264 encoding)
-- ✅ **Server** handles only network relay (minimal CPU usage)
-- ✅ **Result**: Highly scalable architecture supporting 100+ concurrent sessions
-
----
 
 ## ✨ Features
 
-### **Core Capabilities**
-- ✅ **WebSocket Binary Relay** - Forward H.264 video chunks from presenters to viewers
-- ✅ **Room-Based Architecture** - Isolated streaming rooms with one presenter per room
-- ✅ **Multi-Viewer Broadcasting** - One presenter can stream to unlimited viewers
-- ✅ **Init Segment Caching** - Late joiners receive cached H.264 init segment instantly
-- ✅ **Session Management** - Automatic room cleanup when presenter disconnects
-- ✅ **Performance Monitoring** - Real-time CPU, memory, and throughput metrics
-- ✅ **Connection Limits** - Configurable max connections and session timeouts
-- ✅ **Graceful Shutdown** - Notify clients and cleanup before server restart
-
----
-
-## 🛠️ Technology Stack
-
-| Component | Technology | Version | Purpose |
-|-----------|-----------|---------|---------|
-| **Framework** | Spring Boot | 3.1.5 | Web application framework |
-| **WebSocket** | Spring WebSocket | 6.0.x | Real-time binary communication |
-| **Java** | OpenJDK | 17+ | Programming language |
-| **Build Tool** | Maven | 3.9.x | Dependency management |
-| **Server** | Embedded Tomcat | 10.1.x | HTTP/WebSocket server |
-
----
-
-## 📋 System Requirements
-
-### **Server Requirements**
-- **Java:** JDK 17 or higher
-- **Memory:** 2GB RAM minimum, 4GB recommended
-- **CPU:** 2+ cores (very low CPU usage ~5-10% per session)
-- **Network:** 1 Gbps network (main bottleneck)
-- **OS:** Windows, macOS, Linux (platform independent)
-
-### **Estimated Capacity**
-| Metric | Typical Load | High Load |
-|--------|--------------|-----------|
-| **Concurrent Rooms** | 10-20 rooms | 50-100 rooms |
-| **Total Viewers** | 100-200 viewers | 500-1000 viewers |
-| **Bandwidth** | 50-100 Mbps | 500 Mbps - 1 Gbps |
-| **CPU Usage** | 10-20% | 30-50% |
-| **Memory** | 200-400 MB | 500-800 MB |
+- ✅ **Reactive WebSocket Relay** - Non-blocking I/O with Spring WebFlux + Netty
+- ✅ **Room-Based Architecture** - Isolated streaming rooms (1 presenter, multiple viewers)
+- ✅ **Binary Video Streaming** - H.264/fMP4 video relay support
+- ✅ **Init Segment Caching** - Late joiners receive cached init segment instantly
+- ✅ **Auto Backpressure** - Handles slow consumers gracefully
+- ✅ **Low Resource Usage** - Minimal CPU (~5-15%), server only relays data
 
 ---
 
 ## 🚀 Quick Start
 
-### **1. Prerequisites**
-Ensure you have Java 17+ installed:
+### Prerequisites
+
+- **Java 17+** (Java 21 recommended)
+
 ```bash
 java -version
 # Should show: openjdk version "17" or higher
 ```
 
-### **2. Clone the Repository**
-```bash
-git clone https://github.com/vijayvir/ScreenAi.git
-cd ScreenAi
-```
+### Run the Server
 
-### **3. Build the Application**
-```bash
-./mvnw clean package
-```
-
-This creates an executable JAR: `target/screenai-server-1.0.0.jar` (~40 MB)
-
-### **4. Run the Server**
+**Option 1: Using pre-built JAR**
 ```bash
 java -jar target/screenai-server-1.0.0.jar
 ```
 
-Or using Maven:
+**Option 2: Using Maven**
 ```bash
 ./mvnw spring-boot:run
 ```
 
-### **5. Server Started Successfully!**
-You should see:
+### Server Started!
+
 ```
 ═══════════════════════════════════════════════════════
    ScreenAI-Server (Relay Mode) Started Successfully   
@@ -112,117 +66,160 @@ You should see:
 
 📍 WebSocket Endpoint:
    Local:   ws://localhost:8080/screenshare
-   Network: ws://192.168.1.100:8080/screenshare
+   Network: ws://<your-ip>:8080/screenshare
 
 🔧 Server Mode: RELAY ONLY
    ✅ Room management enabled
    ✅ Binary data relay enabled
-   ✅ Performance monitoring enabled
 ```
 
 ---
 
 ## 🔌 WebSocket Protocol
 
-### **Connection URL**
+### Endpoint
 ```
 ws://localhost:8080/screenshare
 ```
 
-### **Message Types**
+### Message Types
 
-#### **1. Create Room (Presenter)**
+#### 1. Create Room (Presenter)
+
 **Request:**
 ```json
-{
-  "type": "create-room",
-  "roomId": "meeting-123"
-}
+{"type": "create-room", "roomId": "my-room-123"}
 ```
 
 **Response:**
 ```json
 {
   "type": "room-created",
-  "roomId": "meeting-123",
-  "role": "presenter"
+  "roomId": "my-room-123",
+  "role": "presenter",
+  "message": "Room created successfully"
 }
 ```
 
-#### **2. Join Room (Viewer)**
+#### 2. Join Room (Viewer)
+
 **Request:**
 ```json
-{
-  "type": "join-room",
-  "roomId": "meeting-123"
-}
+{"type": "join-room", "roomId": "my-room-123"}
 ```
 
 **Response:**
 ```json
 {
   "type": "room-joined",
-  "roomId": "meeting-123",
+  "roomId": "my-room-123",
   "role": "viewer",
-  "viewerCount": 3
+  "hasPresenter": true
 }
 ```
 
-#### **3. Binary Video Data (Presenter Only)**
-Presenters send raw H.264 fMP4 binary data via WebSocket.
+#### 3. Leave Room
 
-Server automatically:
-- ✅ Detects init segments (ftyp/moov boxes)
-- ✅ Caches init segment for late joiners
-- ✅ Relays all data to viewers in the same room
+**Request:**
+```json
+{"type": "leave-room"}
+```
+
+#### 4. Get Viewer Count (Presenter only)
+
+**Request:**
+```json
+{"type": "get-viewer-count"}
+```
+
+**Response:**
+```json
+{"type": "viewer-count", "count": 5}
+```
+
+#### 5. Binary Video Data
+
+- **Presenter** sends H.264 fMP4 video frames as binary WebSocket messages
+- **Server** relays binary data to all viewers in the room
+- **Viewers** receive binary frames for decoding/display
 
 ---
 
-## 🧪 Testing the Server
+## 📨 Server Events
 
-### **Using wscat (WebSocket CLI)**
+| Event | Description |
+|-------|-------------|
+| `connected` | Connection established |
+| `room-created` | Room created successfully |
+| `room-joined` | Joined room as viewer |
+| `waiting` | Room exists but no presenter yet |
+| `presenter-joined` | Presenter started streaming |
+| `presenter-left` | Presenter disconnected |
+| `viewer-joined` | New viewer joined |
+| `viewer-left` | Viewer disconnected |
+| `room-closed` | Room was closed |
+| `error` | Error occurred |
 
-**Install wscat:**
+---
+
+## 🧪 Testing
+
+### Using wscat
+
 ```bash
+# Install wscat
 npm install -g wscat
-```
 
-**Create a Room (Presenter):**
-```bash
+# Create a room (Presenter)
 wscat -c ws://localhost:8080/screenshare
-> {"type":"create-room","roomId":"test-room"}
-< {"type":"room-created","roomId":"test-room","role":"presenter"}
-```
+> {"type":"create-room","roomId":"test"}
 
-**Join Room (Viewer):**
-```bash
+# Join the room (Viewer - new terminal)
 wscat -c ws://localhost:8080/screenshare
-> {"type":"join-room","roomId":"test-room"}
-< {"type":"room-joined","roomId":"test-room","role":"viewer","viewerCount":1}
+> {"type":"join-room","roomId":"test"}
 ```
 
-See **[TESTING_GUIDE.md](TESTING_GUIDE.md)** for complete testing scenarios.
+See [TESTING_GUIDE.md](TESTING_GUIDE.md) for complete test scenarios.
+
+---
+
+## 🏗️ Project Structure
+
+```
+src/main/java/com/screenai/
+├── ScreenAIApplication.java              # Main entry point
+├── config/
+│   └── WebFluxWebSocketConfig.java       # WebSocket configuration
+├── handler/
+│   └── ReactiveScreenShareHandler.java   # WebSocket message handler
+├── model/
+│   ├── ReactiveRoom.java                 # Room state
+│   └── PerformanceMetrics.java           # Metrics model
+└── service/
+    └── PerformanceMonitorService.java    # Performance tracking
+```
 
 ---
 
 ## ⚙️ Configuration
 
-### **application.yml**
+### application.yml
+
 ```yaml
 server:
   port: 8080
 
 spring:
-  websocket:
-    max-text-message-size: 65536      # 64 KB
-    max-binary-message-size: 1048576  # 1 MB
+  main:
+    web-application-type: reactive
 
 logging:
   level:
     com.screenai: INFO
 ```
 
-### **Environment Variables**
+### Environment Variables
+
 ```bash
 # Custom port
 SERVER_PORT=9090 java -jar screenai-server-1.0.0.jar
@@ -230,57 +227,83 @@ SERVER_PORT=9090 java -jar screenai-server-1.0.0.jar
 
 ---
 
-## 🏗️ Project Structure
-
-```
-ScreenAi/
-├── src/main/java/com/screenai/
-│   ├── ScreenAIApplication.java          # Main entry point
-│   ├── config/
-│   │   └── WebSocketConfig.java          # WebSocket config
-│   ├── handler/
-│   │   └── ScreenShareRelayHandler.java  # Message handler
-│   ├── service/
-│   │   ├── SessionManager.java           # Room management
-│   │   ├── StreamRelayService.java       # Video relay
-│   │   └── PerformanceMonitorService.java
-│   └── model/
-│       ├── Room.java
-│       └── PerformanceMetrics.java
-├── pom.xml
-└── target/
-    └── screenai-server-1.0.0.jar        # ~40 MB
-```
-
----
-
 ## 📈 Performance
 
-**Benchmarks** (4-core, 8GB RAM):
+| Scenario | Rooms | Viewers | CPU | Memory |
+|----------|-------|---------|-----|--------|
+| Light    | 5     | 25      | ~8% | 180 MB |
+| Medium   | 20    | 100     | ~15%| 300 MB |
+| Heavy    | 50    | 250     | ~30%| 500 MB |
 
-| Scenario | Rooms | Viewers | CPU | Memory | Bandwidth |
-|----------|-------|---------|-----|--------|-----------|
-| Light | 5 | 25 | 8% | 180 MB | 50 Mbps |
-| Medium | 20 | 100 | 15% | 300 MB | 200 Mbps |
-| Heavy | 50 | 250 | 30% | 500 MB | 500 Mbps |
-| Max | 100 | 500 | 50% | 800 MB | 1 Gbps |
+*Benchmarks on 4-core, 8GB RAM machine*
 
 ---
 
+## 📋 Client Integration
+
+For detailed client integration instructions, see:
+
+📖 **[CLIENT_INTEGRATION_GUIDE.md](CLIENT_INTEGRATION_GUIDE.md)**
+
+Includes:
+- Java WebSocket client examples
+- Presenter and Viewer code samples
+- Video format requirements (H.264 fMP4)
+- Error handling best practices
+
+---
 
 ## 🐛 Troubleshooting
 
-**Port already in use:**
+### Port already in use
 ```bash
 lsof -i :8080
+# Kill the process or use different port
 java -jar -Dserver.port=9090 screenai-server-1.0.0.jar
 ```
 
-**WebSocket connection fails:**
+### WebSocket connection fails
 ```bash
-wscat -c ws://localhost:8080/screenshare
-tail -f logs/screenai-server.log
+# Test if server is running
+curl http://localhost:8080
+
+# Check server logs
+tail -f logs/screenai.log
 ```
+
+### No video data received
+- Ensure presenter has created the room first
+- Verify room ID matches between presenter and viewer
+- Check that presenter is sending binary data
 
 ---
 
+## 🔧 Tech Stack
+
+| Component | Technology | Version |
+|-----------|------------|---------|
+| Framework | Spring Boot | 3.5.5 |
+| Reactive | Spring WebFlux | 6.x |
+| Server | Netty | 4.x |
+| Java | OpenJDK | 17+ |
+| Build | Maven | 3.9.x |
+
+---
+
+## 📄 License
+
+MIT License - See [LICENSE](LICENSE) for details.
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+Made with ❤️ for real-time screen sharing
