@@ -227,32 +227,6 @@ SERVER_PORT=9090 java -jar screenai-server-1.0.0.jar
 
 ---
 
-## 📈 Performance
-
-| Scenario | Rooms | Viewers | CPU | Memory |
-|----------|-------|---------|-----|--------|
-| Light    | 5     | 25      | ~8% | 180 MB |
-| Medium   | 20    | 100     | ~15%| 300 MB |
-| Heavy    | 50    | 250     | ~30%| 500 MB |
-
-*Benchmarks on 4-core, 8GB RAM machine*
-
----
-
-## 📋 Client Integration
-
-For detailed client integration instructions, see:
-
-📖 **[CLIENT_INTEGRATION_GUIDE.md](CLIENT_INTEGRATION_GUIDE.md)**
-
-Includes:
-- Java WebSocket client examples
-- Presenter and Viewer code samples
-- Video format requirements (H.264 fMP4)
-- Error handling best practices
-
----
-
 ## 🐛 Troubleshooting
 
 ### Port already in use
@@ -290,20 +264,3 @@ tail -f logs/screenai.log
 
 ---
 
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) for details.
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-Made with ❤️ for real-time screen sharing
