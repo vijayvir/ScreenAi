@@ -4,81 +4,67 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.util.Enumeration;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.scheduling.annotation.EnableScheduling;
-
-import com.screenai.service.ScreenCaptureService;
 
 /**
- * Main application class for ScreenAI
+ * Main application class for ScreenAI-Server
  * 
- * This application provides real-time screen sharing capabilities using:
- * - Spring Boot for the web framework
- * - WebSockets for real-time communication
- * - JavaCV for cross-platform screen capture
- * - Thymeleaf for the web interface
+ * This is a RELAY-ONLY server using Spring WebFlux + Netty for high-performance
+ * non-blocking video streaming.
  * 
- * The application is cross-platform compatible and works on Windows, macOS, and Linux.
+ * Features:
+ * - Spring WebFlux for reactive web framework
+ * - Netty for non-blocking I/O
+ * - Reactive WebSockets for real-time binary data relay
+ * - Room-based session management
+ * - Automatic backpressure handling
  */
 @SpringBootApplication
-@EnableScheduling
 public class ScreenAIApplication implements CommandLineRunner {
 
-	@Autowired
-	private ScreenCaptureService screenCaptureService;
-
 	public static void main(String[] args) {
-		// Ensure GUI access is available (not headless mode)
-		System.setProperty("java.awt.headless", "false");
-		
-		SpringApplication app = new SpringApplication(ScreenAIApplication.class);
-		app.setHeadless(false); // Ensure Spring Boot doesn't run in headless mode
-		app.run(args);
+		SpringApplication.run(ScreenAIApplication.class, args);
 	}
 
 	@Override
 	public void run(String... args) throws Exception {
 		// Print startup information after Spring Boot is fully initialized
-		System.out.println("=================================");
-		System.out.println("ScreenAI Server Started");
-		System.out.println("=================================");
+		System.out.println("═══════════════════════════════════════════════════════════");
+		System.out.println("   ScreenAI-Server (WebFlux + Netty) Started Successfully   ");
+		System.out.println("═══════════════════════════════════════════════════════════");
+		System.out.println("");
 		
 		// Show local access URL
-		System.out.println("Local access: http://localhost:8080");
+		System.out.println("📍 WebSocket Endpoint:");
+		System.out.println("   Local:   ws://localhost:8080/screenshare");
 		
-		// Show network IP addresses for WiFi access
+		// Show network IP addresses for remote access
 		String networkIp = getNetworkIp();
 		if (networkIp != null) {
-			System.out.println("Network access: http://" + networkIp + ":8080");
+			System.out.println("   Network: ws://" + networkIp + ":8080/screenshare");
 			System.out.println("");
-			System.out.println("To view from another device on same WiFi:");
-			System.out.println("1. Connect your other device to the same WiFi network");
-			System.out.println("2. Open a web browser on that device");
-			System.out.println("3. Navigate to: http://" + networkIp + ":8080");
+			System.out.println("🌐 Network Access Instructions:");
+			System.out.println("   1. Connect client device to same network");
+			System.out.println("   2. Use network address: " + networkIp + ":8080");
 		} else {
-			System.out.println("Network IP not detected - check your WiFi connection");
+			System.out.println("   ⚠️  Network IP not detected - check connection");
 		}
 		
-		System.out.println("=================================");
-		
-		// Initialize screen capture (but don't auto-start)
-		try {
-			screenCaptureService.initialize();
-			if (screenCaptureService.isInitialized()) {
-				System.out.println("Screen capture initialized successfully!");
-				System.out.println("Capture method: " + screenCaptureService.getCaptureMethod());
-				System.out.println("Ready to start capture when requested via API");
-			} else {
-				System.out.println("Warning: Screen capture could not be initialized");
-			}
-		} catch (Exception e) {
-			System.out.println("Error initializing screen capture: " + e.getMessage());
-		}
-		
-		System.out.println("=================================");
+		System.out.println("");
+		System.out.println("� Server Mode: WebFlux + Netty (Non-Blocking)");
+		System.out.println("   ✅ Reactive WebSocket handling");
+		System.out.println("   ✅ Non-blocking I/O via Netty");
+		System.out.println("   ✅ Automatic backpressure handling");
+		System.out.println("   ✅ Binary data relay (no size limits)");
+		System.out.println("   ✅ Room management enabled");
+		System.out.println("");
+		System.out.println("🧪 Test with wscat:");
+		System.out.println("   wscat -c ws://localhost:8080/screenshare");
+		System.out.println("   > {\"type\":\"create-room\",\"roomId\":\"test\"}");
+		System.out.println("");
+		System.out.println("═══════════════════════════════════════════════════════════");
 	}
 	
 	/**

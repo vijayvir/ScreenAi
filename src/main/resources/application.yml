@@ -1,9 +1,9 @@
 server:
   port: 8080
-  error:
-    include-message: always
-    include-binding-errors: always
-    include-stacktrace: on-param
+  # Netty server configuration (WebFlux uses Netty by default)
+  netty:
+    connection-timeout: 60s
+    idle-timeout: 600s
 
 spring:
   application:
@@ -11,18 +11,20 @@ spring:
   thymeleaf:
     cache: false
     mode: HTML
-  web:
-    resources:
-      cache:
-        period: 3600 # 1 hour cache for static resources
+  webflux:
+    # WebFlux specific settings
+    base-path: /
+  codec:
+    # Max in-memory size for WebFlux codecs (for large video frames)
+    max-in-memory-size: 10MB
 
 # Logging configuration
 logging:
   level:
     root: INFO
     com.screenai: INFO
-    org.springframework.web.socket: WARN
-    org.bytedeco.javacv: WARN
+    reactor.netty: WARN
+    org.springframework.web.reactive: INFO
   pattern:
     console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{50} - %msg%n"
