@@ -115,6 +115,31 @@ public class AccessCodeController {
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
+
+     @PostMapping("/status")
+    public ResponseEntity<Map<String, Object>> getSessionStats() {
+        try {
+            // Get the number of active sessions
+            int activeSessions = accessCodeService.getActiveSessionCount();
+            
+            // Prepare response data
+            Map<String, Object> response = Map.of(
+                "activeSessions", activeSessions,
+                "message", "Session statistics retrieved successfully"
+            );
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            System.err.println("Error getting session stats: " + e.getMessage());
+            
+            Map<String, Object> errorResponse = Map.of(
+                "error", "Failed to get session statistics",
+                "message", e.getMessage()
+            );
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
     
   /*/
     @PostMapping("/validate")
@@ -157,32 +182,9 @@ public class AccessCodeController {
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
+    /*/
     
-    
-    @PostMapping("/stats")
-    public ResponseEntity<Map<String, Object>> getSessionStats() {
-        try {
-            // Get the number of active sessions
-            int activeSessions = accessCodeService.getActiveSessionCount();
-            
-            // Prepare response data
-            Map<String, Object> response = Map.of(
-                "activeSessions", activeSessions,
-                "message", "Session statistics retrieved successfully"
-            );
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (Exception e) {
-            System.err.println("Error getting session stats: " + e.getMessage());
-            
-            Map<String, Object> errorResponse = Map.of(
-                "error", "Failed to get session statistics",
-                "message", e.getMessage()
-            );
-            return ResponseEntity.internalServerError().body(errorResponse);
-        }
-    }*/
+   
 
 
 }
