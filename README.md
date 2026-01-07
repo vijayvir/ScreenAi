@@ -238,7 +238,7 @@ wscat -c ws://localhost:8080/screenshare
 ### Using the ScreenAI Client
 
 1. Start the server: `./mvnw spring-boot:run`
-2. Run the client application (see [ScreenAI-Client](../ScreenAI-Client/README.md))
+2. Run the client application (see [ScreenAI-Client]https://github.com/vijayvir/ScreenAiClient)
 3. Connect to `localhost:8080`
 4. Create a room and start sharing
 
@@ -288,6 +288,6 @@ tail -f logs/screenai.log
 
 ## 📄 Related Projects
 
-- **[ScreenAI-Client](../ScreenAI-Client)** - JavaFX desktop client for screen sharing
+- **[ScreenAI-Client](https://github.com/vijayvir/ScreenAiClient)** - JavaFX desktop client for screen sharing
 
 
