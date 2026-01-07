@@ -2,6 +2,8 @@
 
 A **lightweight WebSocket relay server** for real-time screen sharing. Built with **Spring Boot WebFlux + Netty** for high-performance, non-blocking video streaming.
 
+![Spring Boot 3.5.5](https://img.shields.io/badge/Spring_Boot-3.5.5-green) ![Java 21](https://img.shields.io/badge/Java-21-red) ![WebFlux](https://img.shields.io/badge/Reactive-WebFlux-blue) ![Netty](https://img.shields.io/badge/Server-Netty-orange)
+
 ## 🎯 Overview
 
 ScreenAI-Server acts as a relay hub between presenters (screen sharers) and viewers:
@@ -20,17 +22,18 @@ ScreenAI-Server acts as a relay hub between presenters (screen sharers) and view
          │                           │                           │
          │  3. Binary video frames   │  4. Relay to viewers      │
          │══════════════════════════►│══════════════════════════►│
-         │      (H.264 fMP4)         │      (H.264 fMP4)         │
+         │      (H.264 MPEG-TS)      │      (H.264 MPEG-TS)      │
 ```
 
 ## ✨ Features
 
 - ✅ **Reactive WebSocket Relay** - Non-blocking I/O with Spring WebFlux + Netty
 - ✅ **Room-Based Architecture** - Isolated streaming rooms (1 presenter, multiple viewers)
-- ✅ **Binary Video Streaming** - H.264/fMP4 video relay support
+- ✅ **Binary Video Streaming** - H.264/MPEG-TS video relay support
 - ✅ **Init Segment Caching** - Late joiners receive cached init segment instantly
 - ✅ **Auto Backpressure** - Handles slow consumers gracefully
 - ✅ **Low Resource Usage** - Minimal CPU (~5-15%), server only relays data
+- ✅ **Cross-Platform Clients** - Supports macOS, Windows, and Linux clients
 
 ---
 
@@ -47,30 +50,33 @@ java -version
 
 ### Run the Server
 
-**Option 1: Using pre-built JAR**
-```bash
-java -jar target/screenai-server-1.0.0.jar
-```
-
-**Option 2: Using Maven**
+**Option 1: Using Maven Wrapper (Recommended)**
 ```bash
 ./mvnw spring-boot:run
+```
+
+**Option 2: Using pre-built JAR**
+```bash
+java -jar target/screenai-server-1.0.0.jar
 ```
 
 ### Server Started!
 
 ```
-═══════════════════════════════════════════════════════
-   ScreenAI-Server (Relay Mode) Started Successfully   
-═══════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════
+   ScreenAI-Server (WebFlux + Netty) Started Successfully   
+═══════════════════════════════════════════════════════════
 
 📍 WebSocket Endpoint:
    Local:   ws://localhost:8080/screenshare
    Network: ws://<your-ip>:8080/screenshare
 
-🔧 Server Mode: RELAY ONLY
+🔧 Server Mode: WebFlux + Netty (Non-Blocking)
+   ✅ Reactive WebSocket handling
+   ✅ Non-blocking I/O via Netty
+   ✅ Automatic backpressure handling
+   ✅ Binary data relay (no size limits)
    ✅ Room management enabled
-   ✅ Binary data relay enabled
 ```
 
 ---
@@ -139,7 +145,7 @@ ws://localhost:8080/screenshare
 
 #### 5. Binary Video Data
 
-- **Presenter** sends H.264 fMP4 video frames as binary WebSocket messages
+- **Presenter** sends H.264 MPEG-TS video frames as binary WebSocket messages
 - **Server** relays binary data to all viewers in the room
 - **Viewers** receive binary frames for decoding/display
 
@@ -162,41 +168,23 @@ ws://localhost:8080/screenshare
 
 ---
 
-## 🧪 Testing
-
-### Using wscat
-
-```bash
-# Install wscat
-npm install -g wscat
-
-# Create a room (Presenter)
-wscat -c ws://localhost:8080/screenshare
-> {"type":"create-room","roomId":"test"}
-
-# Join the room (Viewer - new terminal)
-wscat -c ws://localhost:8080/screenshare
-> {"type":"join-room","roomId":"test"}
-```
-
-See [TESTING_GUIDE.md](TESTING_GUIDE.md) for complete test scenarios.
-
----
-
 ## 🏗️ Project Structure
 
 ```
 src/main/java/com/screenai/
-├── ScreenAIApplication.java              # Main entry point
+├── ScreenAIApplication.java              # Main entry point with startup banner
 ├── config/
-│   └── WebFluxWebSocketConfig.java       # WebSocket configuration
+│   ├── WebFluxWebSocketConfig.java       # WebSocket endpoint configuration
+│   └── JacksonConfig.java                # JSON serialization config
 ├── handler/
-│   └── ReactiveScreenShareHandler.java   # WebSocket message handler
+│   └── ReactiveScreenShareHandler.java   # WebSocket message handler (rooms, relay)
 ├── model/
-│   ├── ReactiveRoom.java                 # Room state
+│   ├── ReactiveRoom.java                 # Room state management
 │   └── PerformanceMetrics.java           # Metrics model
-└── service/
-    └── PerformanceMonitorService.java    # Performance tracking
+├── service/
+│   └── PerformanceMonitorService.java    # Performance tracking
+└── controller/
+    └── PerformanceController.java        # REST API for metrics
 ```
 
 ---
@@ -223,7 +211,36 @@ logging:
 ```bash
 # Custom port
 SERVER_PORT=9090 java -jar screenai-server-1.0.0.jar
+
+# Or with Maven
+./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=9090
 ```
+
+---
+
+## 🧪 Testing
+
+### Using wscat
+
+```bash
+# Install wscat
+npm install -g wscat
+
+# Create a room (Presenter)
+wscat -c ws://localhost:8080/screenshare
+> {"type":"create-room","roomId":"test"}
+
+# Join the room (Viewer - new terminal)
+wscat -c ws://localhost:8080/screenshare
+> {"type":"join-room","roomId":"test"}
+```
+
+### Using the ScreenAI Client
+
+1. Start the server: `./mvnw spring-boot:run`
+2. Run the client application (see [ScreenAI-Client](../ScreenAI-Client/README.md))
+3. Connect to `localhost:8080`
+4. Create a room and start sharing
 
 ---
 
@@ -231,8 +248,13 @@ SERVER_PORT=9090 java -jar screenai-server-1.0.0.jar
 
 ### Port already in use
 ```bash
+# Find process using port 8080
 lsof -i :8080
-# Kill the process or use different port
+
+# Kill it and restart
+lsof -ti:8080 | xargs kill -9
+
+# Or use different port
 java -jar -Dserver.port=9090 screenai-server-1.0.0.jar
 ```
 
@@ -259,8 +281,13 @@ tail -f logs/screenai.log
 | Framework | Spring Boot | 3.5.5 |
 | Reactive | Spring WebFlux | 6.x |
 | Server | Netty | 4.x |
-| Java | OpenJDK | 17+ |
+| Java | OpenJDK | 17-21 |
 | Build | Maven | 3.9.x |
 
 ---
+
+## 📄 Related Projects
+
+- **[ScreenAI-Client](../ScreenAI-Client)** - JavaFX desktop client for screen sharing
+
 
