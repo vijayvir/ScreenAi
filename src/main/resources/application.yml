@@ -8,6 +8,8 @@ server:
 spring:
   application:
     name: ScreenAI
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   thymeleaf:
     cache: false
     mode: HTML
@@ -17,14 +19,91 @@ spring:
   codec:
     # Max in-memory size for WebFlux codecs (for large video frames)
     max-in-memory-size: 10MB
+  
+  # R2DBC Database Configuration (Reactive)
+  r2dbc:
+    url: r2dbc:h2:mem:///screenai_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: 
+    pool:
+      initial-size: 5
+      max-size: 10
+  
+  # H2 Console (dev only)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+# =====================================================
+# Security Configuration
+# =====================================================
+security:
+  jwt:
+    # Secret key for JWT signing (override in production via JWT_SECRET env var)
+    secret: ${JWT_SECRET:screenai-dev-secret-key-change-in-production-minimum-256-bits}
+    # Access token expiration (15 minutes)
+    access-token-expiration: 900000
+    # Refresh token expiration (7 days)
+    refresh-token-expiration: 604800000
+    # Token issuer
+    issuer: ScreenAI
+  
+  # Password policy
+  password:
+    min-length: 8
+    require-uppercase: true
+    require-lowercase: true
+    require-digit: true
+    require-special: true
+  
+  # Account lockout
+  lockout:
+    max-attempts: 5
+    duration-minutes: 15
+  
+  # Rate limiting
+  rate-limit:
+    # Messages per second per session
+    messages-per-second: 100
+    # Room creations per hour per IP
+    room-creations-per-hour: 10
+    # Failed auth attempts before IP block
+    failed-auth-before-block: 5
+    # IP block duration in minutes
+    ip-block-duration-minutes: 15
+  
+  # Resource limits
+  resource-limits:
+    max-active-rooms: 100
+    max-viewers-per-room: 50
+    max-rooms-per-user: 5
+    max-binary-message-size: 10485760
+  
+  # Room security
+  room:
+    # Access code expiration (24 hours)
+    access-code-expiration-hours: 24
+    # Idle room timeout (1 hour)
+    idle-timeout-minutes: 60
+
+# =====================================================
+# Admin Configuration
+# =====================================================
+admin:
+  # Default admin credentials (override in production)
+  username: ${ADMIN_USERNAME:admin}
+  password: ${ADMIN_PASSWORD:admin123}
 
 # Logging configuration
 logging:
   level:
     root: INFO
     com.screenai: INFO
+    com.screenai.security: DEBUG
     reactor.netty: WARN
     org.springframework.web.reactive: INFO
+    org.springframework.security: INFO
   pattern:
     console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{50} - %msg%n"

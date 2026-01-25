@@ -30,7 +30,6 @@ public class PerformanceMonitorService {
     private volatile boolean monitoring = false;
     private int totalFrames = 0;
     private int droppedFrames = 0;
-    private long sessionStartTime = 0;
     private String currentEncoderType = "Unknown";
     
     private final List<MetricsListener> listeners = new CopyOnWriteArrayList<>();
@@ -64,7 +63,6 @@ public class PerformanceMonitorService {
     public void startMonitoring(String encoderType) {
         this.monitoring = true;
         this.currentEncoderType = encoderType;
-        this.sessionStartTime = System.currentTimeMillis();
         this.totalFrames = 0;
         this.droppedFrames = 0;
         

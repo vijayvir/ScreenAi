@@ -1,5 +1,6 @@
 package com.screenai.handler;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Optional;
@@ -14,7 +15,17 @@ import org.springframework.web.reactive.socket.WebSocketSession;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.screenai.dto.ErrorResponse.ErrorCode;
+import com.screenai.exception.RateLimitException;
+import com.screenai.exception.RoomException;
 import com.screenai.model.ReactiveRoom;
+import com.screenai.security.WebSocketAuthHandler;
+import com.screenai.security.WebSocketAuthHandler.AuthenticatedUser;
+import com.screenai.service.ConnectionThrottleService;
+import com.screenai.service.RateLimitService;
+import com.screenai.service.RoomSecurityService;
+import com.screenai.service.SecurityAuditService;
+import com.screenai.validation.InputValidator;
 
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
@@ -28,6 +39,10 @@ import reactor.core.publisher.Sinks;
  * - Reactive streams for video data relay
  * - Automatic backpressure handling
  * - Efficient binary data handling
+ * - JWT authentication
+ * - Room password protection
+ * - Viewer approval system
+ * - Rate limiting
  */
 @Component
 public class ReactiveScreenShareHandler implements WebSocketHandler {
@@ -47,44 +62,123 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
     // Session sinks for sending messages (session ID -> sink)
     private final Map<String, Sinks.Many<WebSocketMessage>> sessionSinks = new ConcurrentHashMap<>();
     
+    // Session to authenticated user mapping
+    private final Map<String, AuthenticatedUser> sessionUsers = new ConcurrentHashMap<>();
+    
+    // Session to IP address mapping
+    private final Map<String, String> sessionIpAddresses = new ConcurrentHashMap<>();
+    
+    // Security services
+    private final WebSocketAuthHandler authHandler;
+    private final RoomSecurityService roomSecurityService;
+    private final RateLimitService rateLimitService;
+    private final ConnectionThrottleService connectionThrottleService;
+    private final SecurityAuditService auditService;
+    private final InputValidator inputValidator;
+    
+    public ReactiveScreenShareHandler(
+            WebSocketAuthHandler authHandler,
+            RoomSecurityService roomSecurityService,
+            RateLimitService rateLimitService,
+            ConnectionThrottleService connectionThrottleService,
+            SecurityAuditService auditService,
+            InputValidator inputValidator) {
+        this.authHandler = authHandler;
+        this.roomSecurityService = roomSecurityService;
+        this.rateLimitService = rateLimitService;
+        this.connectionThrottleService = connectionThrottleService;
+        this.auditService = auditService;
+        this.inputValidator = inputValidator;
+    }
+    
     @Override
     public Mono<Void> handle(WebSocketSession session) {
         String sessionId = session.getId();
-        logger.info("🔌 New WebSocket connection: {}", sessionId);
+        String ipAddress = extractIpAddress(session);
+        
+        logger.info("🔌 New WebSocket connection: {} from IP: {}", sessionId, ipAddress);
+        
+        // Check if IP is blocked
+        if (connectionThrottleService.isBlockedSync(ipAddress)) {
+            logger.warn("🚫 Blocked IP attempted connection: {}", ipAddress);
+            return session.close();
+        }
+        
+        // Store IP address for this session
+        sessionIpAddresses.put(sessionId, ipAddress);
         
         // Create a sink for outbound messages to this session
         Sinks.Many<WebSocketMessage> outboundSink = Sinks.many().multicast().onBackpressureBuffer(1024);
         sessionSinks.put(sessionId, outboundSink);
         
-        // Send welcome message
-        sendTextToSession(session, createWelcomeMessage(sessionId));
-        
-        // Handle incoming messages
-        Mono<Void> input = session.receive()
-            .doOnNext(message -> handleMessage(session, message))
-            .doOnError(error -> logger.error("❌ Error receiving message: {}", error.getMessage()))
-            .doFinally(signalType -> handleDisconnect(session))
-            .then();
-        
-        // Send outbound messages
-        Mono<Void> output = session.send(outboundSink.asFlux());
-        
-        // Combine input and output - both must complete
-        return Mono.zip(input, output).then();
+        // Authenticate via token in query param
+        return authHandler.authenticate(session.getHandshakeInfo().getUri(), sessionId, ipAddress)
+            .doOnNext(user -> {
+                sessionUsers.put(sessionId, user);
+                logger.info("✅ Authenticated WebSocket user: {}", user.username());
+            })
+            .then(Mono.defer(() -> {
+                // Send welcome message
+                AuthenticatedUser user = sessionUsers.get(sessionId);
+                sendTextToSession(session, createWelcomeMessage(sessionId, user));
+                
+                // Handle incoming messages
+                Mono<Void> input = session.receive()
+                    .doOnNext(message -> handleMessage(session, message))
+                    .doOnError(error -> logger.error("❌ Error receiving message: {}", error.getMessage()))
+                    .doFinally(signalType -> handleDisconnect(session))
+                    .then();
+                
+                // Send outbound messages
+                Mono<Void> output = session.send(outboundSink.asFlux());
+                
+                // Combine input and output - both must complete
+                return Mono.zip(input, output).then();
+            }));
+    }
+    
+    /**
+     * Extract IP address from WebSocket session
+     */
+    private String extractIpAddress(WebSocketSession session) {
+        InetSocketAddress remoteAddress = session.getHandshakeInfo().getRemoteAddress();
+        if (remoteAddress != null) {
+            return remoteAddress.getAddress().getHostAddress();
+        }
+        return "unknown";
     }
     
     /**
      * Handle incoming WebSocket message (text or binary)
      */
     private void handleMessage(WebSocketSession session, WebSocketMessage message) {
+        String sessionId = session.getId();
+        String ipAddress = sessionIpAddresses.getOrDefault(sessionId, "unknown");
+        
         try {
+            // Check rate limit
+            rateLimitService.checkMessageRateLimit(sessionId, ipAddress);
+            
             switch (message.getType()) {
                 case TEXT -> handleTextMessage(session, message.getPayloadAsText());
-                case BINARY -> handleBinaryMessage(session, message.getPayload().asByteBuffer());
+                case BINARY -> {
+                    org.springframework.core.io.buffer.DataBuffer payload = message.getPayload();
+                    byte[] bytes = new byte[payload.readableByteCount()];
+                    payload.read(bytes);
+                    
+                    // Validate binary size
+                    inputValidator.validateBinarySize(bytes.length);
+                    
+                    ByteBuffer buffer = ByteBuffer.wrap(bytes);
+                    handleBinaryMessage(session, buffer);
+                }
                 default -> logger.debug("Ignoring message type: {}", message.getType());
             }
+        } catch (RateLimitException e) {
+            sendError(session, e.getErrorCode(), e.getMessage());
         } catch (Exception e) {
             logger.error("Error handling message: {}", e.getMessage());
+            sendError(session, ErrorCode.SRV_001, "Error processing message");
         }
     }
     
@@ -97,7 +191,7 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
             String type = json.has("type") ? json.get("type").asText() : null;
             
             if (type == null) {
-                sendError(session, "Missing 'type' field");
+                sendError(session, ErrorCode.VAL_002, "Missing 'type' field");
                 return;
             }
             
@@ -108,11 +202,19 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
                 case "join-room" -> handleJoinRoom(session, json);
                 case "leave-room" -> handleLeaveRoom(session);
                 case "get-viewer-count" -> handleGetViewerCount(session);
-                default -> sendError(session, "Unknown command: " + type);
+                // New security commands
+                case "approve-viewer" -> handleApproveViewer(session, json);
+                case "deny-viewer" -> handleDenyViewer(session, json);
+                case "ban-viewer" -> handleBanViewer(session, json);
+                case "kick-viewer" -> handleKickViewer(session, json);
+                default -> sendError(session, ErrorCode.VAL_001, "Unknown command: " + type);
             }
+        } catch (RoomException e) {
+            logger.warn("Room error: {}", e.getMessage());
+            sendError(session, e.getErrorCode(), e.getMessage());
         } catch (Exception e) {
             logger.error("Error parsing JSON: {}", e.getMessage());
-            sendError(session, "Invalid JSON: " + e.getMessage());
+            sendError(session, ErrorCode.VAL_001, "Invalid JSON format");
         }
     }
     
@@ -213,12 +315,35 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
      */
     private void handleCreateRoom(WebSocketSession session, JsonNode json) {
         String roomId = json.has("roomId") ? json.get("roomId").asText() : null;
+        String password = json.has("password") ? json.get("password").asText() : null;
+        int maxViewers = json.has("maxViewers") ? json.get("maxViewers").asInt(50) : 50;
+        
+        String sessionId = session.getId();
+        String ipAddress = sessionIpAddresses.getOrDefault(sessionId, "unknown");
+        AuthenticatedUser user = sessionUsers.get(sessionId);
+        String username = user != null ? user.username() : null;
+        
+        // Validate room ID
         if (roomId == null || roomId.isEmpty()) {
-            sendError(session, "Missing roomId");
+            sendError(session, ErrorCode.VAL_002, "Missing roomId");
             return;
         }
         
-        String sessionId = session.getId();
+        try {
+            inputValidator.validateRoomId(roomId);
+            inputValidator.validateRoomPassword(password);
+        } catch (RoomException e) {
+            sendError(session, e.getErrorCode(), e.getMessage());
+            return;
+        }
+        
+        // Check rate limit for room creation
+        try {
+            rateLimitService.checkRoomCreationRateLimit(ipAddress, username);
+        } catch (RateLimitException e) {
+            sendError(session, e.getErrorCode(), e.getMessage());
+            return;
+        }
         
         // Check if room already exists
         if (rooms.containsKey(roomId)) {
@@ -238,18 +363,43 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
             }
         }
         
-        ReactiveRoom room = new ReactiveRoom(roomId, sessionId, session);
+        // Create room with optional password
+        ReactiveRoom room = new ReactiveRoom(roomId, sessionId, session, username);
+        room.setMaxViewers(Math.min(maxViewers, 100)); // Cap at 100
+        
+        // Set up password protection if provided
+        boolean hasPassword = password != null && !password.isEmpty();
+        if (hasPassword) {
+            RoomSecurityService.PasswordHashResult hashResult = roomSecurityService.createPasswordHash(password);
+            room.setPassword(hashResult.hash(), hashResult.salt());
+            
+            // Generate access code for easy sharing
+            String accessCode = roomSecurityService.generateAccessCode();
+            room.setAccessCode(accessCode, roomSecurityService.calculateAccessCodeExpiration());
+        }
+        
         rooms.put(roomId, room);
         sessionToRoom.put(sessionId, roomId);
         sessionRoles.put(sessionId, "presenter");
         
-        String response = String.format(
-            "{\"type\":\"room-created\",\"roomId\":\"%s\",\"role\":\"presenter\"}",
-            roomId
-        );
-        sendTextToSession(session, response);
+        // Build response
+        StringBuilder responseBuilder = new StringBuilder();
+        responseBuilder.append("{\"type\":\"room-created\"");
+        responseBuilder.append(",\"roomId\":\"").append(roomId).append("\"");
+        responseBuilder.append(",\"role\":\"presenter\"");
+        responseBuilder.append(",\"passwordProtected\":").append(hasPassword);
+        responseBuilder.append(",\"requiresApproval\":").append(room.requiresApproval());
+        if (room.getAccessCode() != null) {
+            responseBuilder.append(",\"accessCode\":\"").append(room.getAccessCode()).append("\"");
+        }
+        responseBuilder.append("}");
         
-        logger.info("✅ Room created: {} by presenter: {}", roomId, sessionId);
+        sendTextToSession(session, responseBuilder.toString());
+        
+        // Log audit event
+        auditService.logRoomCreated(username, sessionId, roomId, ipAddress, hasPassword).subscribe();
+        
+        logger.info("✅ Room created: {} by presenter: {} (password protected: {})", roomId, sessionId, hasPassword);
     }
     
     /**
@@ -278,21 +428,108 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
      */
     private void handleJoinRoom(WebSocketSession session, JsonNode json) {
         String roomId = json.has("roomId") ? json.get("roomId").asText() : null;
+        String password = json.has("password") ? json.get("password").asText() : null;
+        String accessCode = json.has("accessCode") ? json.get("accessCode").asText() : null;
+        
+        String sessionId = session.getId();
+        String ipAddress = sessionIpAddresses.getOrDefault(sessionId, "unknown");
+        AuthenticatedUser user = sessionUsers.get(sessionId);
+        String username = user != null ? user.username() : "anonymous";
+        
+        // Validate room ID
         if (roomId == null || roomId.isEmpty()) {
-            sendError(session, "Missing roomId");
+            sendError(session, ErrorCode.VAL_002, "Missing roomId");
+            return;
+        }
+        
+        try {
+            inputValidator.validateRoomId(roomId);
+        } catch (RoomException e) {
+            sendError(session, e.getErrorCode(), e.getMessage());
             return;
         }
         
         ReactiveRoom room = rooms.get(roomId);
         if (room == null) {
-            sendError(session, "Room not found: " + roomId);
+            sendError(session, ErrorCode.ROOM_001, "Room not found");
+            auditService.logRoomAccessDenied(username, sessionId, roomId, ipAddress, "Room not found").subscribe();
             return;
         }
         
-        String sessionId = session.getId();
+        // Check if user is banned
+        if (room.isBanned(sessionId)) {
+            sendError(session, ErrorCode.ROOM_006, "You are banned from this room");
+            auditService.logRoomAccessDenied(username, sessionId, roomId, ipAddress, "Banned").subscribe();
+            return;
+        }
+        
+        // Check if room is full
+        if (room.isFull()) {
+            sendError(session, ErrorCode.ROOM_004, "Room is full");
+            auditService.logRoomAccessDenied(username, sessionId, roomId, ipAddress, "Room full").subscribe();
+            return;
+        }
+        
+        // Validate password for password-protected rooms
+        if (room.isPasswordProtected()) {
+            // Can use either password or access code
+            boolean accessGranted = false;
+            
+            if (accessCode != null && !accessCode.isEmpty()) {
+                // Validate access code
+                if (room.isAccessCodeValid() && accessCode.equals(room.getAccessCode())) {
+                    accessGranted = true;
+                }
+            }
+            
+            if (!accessGranted && password != null) {
+                // Validate password
+                if (roomSecurityService.verifyPassword(password, room.getPasswordHash(), room.getPasswordSalt())) {
+                    accessGranted = true;
+                }
+            }
+            
+            if (!accessGranted) {
+                sendError(session, ErrorCode.ROOM_003, "Invalid password or access code");
+                auditService.logRoomAccessDenied(username, sessionId, roomId, ipAddress, "Invalid credentials").subscribe();
+                return;
+            }
+        }
+        
         Sinks.Many<WebSocketMessage> sink = sessionSinks.get(sessionId);
         
-        room.addViewer(sessionId, session, sink);
+        // If room requires approval, add to pending
+        if (room.requiresApproval()) {
+            room.addPendingViewer(sessionId, username, session, sink);
+            sessionToRoom.put(sessionId, roomId);
+            sessionRoles.put(sessionId, "pending-viewer");
+            
+            // Notify viewer they're waiting for approval
+            String response = String.format(
+                "{\"type\":\"waiting-approval\",\"roomId\":\"%s\",\"message\":\"Waiting for host approval\"}",
+                roomId
+            );
+            sendTextToSession(session, response);
+            
+            // Notify presenter of pending viewer
+            notifyPresenterOfPendingViewer(room, sessionId, username);
+            
+            logger.info("⏳ Viewer {} waiting for approval in room: {}", sessionId, roomId);
+            return;
+        }
+        
+        // Direct join (no approval required)
+        addViewerToRoom(room, sessionId, username, session, sink, ipAddress);
+    }
+    
+    /**
+     * Add viewer to room and send appropriate messages
+     */
+    private void addViewerToRoom(ReactiveRoom room, String sessionId, String username, 
+                                  WebSocketSession session, Sinks.Many<WebSocketMessage> sink, String ipAddress) {
+        String roomId = room.getRoomId();
+        
+        room.addViewer(sessionId, username, session, sink);
         sessionToRoom.put(sessionId, roomId);
         sessionRoles.put(sessionId, "viewer");
         
@@ -322,7 +559,303 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
         // Notify presenter of viewer count
         notifyPresenterOfViewerCount(room);
         
+        // Log audit event
+        auditService.logRoomJoined(username, sessionId, roomId, ipAddress).subscribe();
+        
         logger.info("✅ Viewer {} joined room: {} (Total: {})", sessionId, roomId, room.getViewerCount());
+    }
+    
+    /**
+     * Notify presenter of pending viewer request
+     */
+    private void notifyPresenterOfPendingViewer(ReactiveRoom room, String viewerSessionId, String viewerUsername) {
+        String presenterSessionId = room.getPresenterSessionId();
+        Sinks.Many<WebSocketMessage> sink = sessionSinks.get(presenterSessionId);
+        
+        if (sink != null && room.getPresenterSession() != null) {
+            try {
+                String message = String.format(
+                    "{\"type\":\"viewer-request\",\"viewerSessionId\":\"%s\",\"viewerUsername\":\"%s\",\"pendingCount\":%d}",
+                    viewerSessionId, viewerUsername != null ? viewerUsername : "anonymous", room.getPendingViewerCount()
+                );
+                WebSocketMessage msg = room.getPresenterSession().textMessage(message);
+                sink.tryEmitNext(msg);
+            } catch (Exception e) {
+                logger.debug("Failed to notify presenter of pending viewer: {}", e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Approve a pending viewer (presenter only)
+     */
+    private void handleApproveViewer(WebSocketSession session, JsonNode json) {
+        String sessionId = session.getId();
+        String role = sessionRoles.get(sessionId);
+        String roomId = sessionToRoom.get(sessionId);
+        String ipAddress = sessionIpAddresses.getOrDefault(sessionId, "unknown");
+        AuthenticatedUser user = sessionUsers.get(sessionId);
+        String username = user != null ? user.username() : "anonymous";
+        
+        // Only presenter can approve
+        if (!"presenter".equals(role)) {
+            sendError(session, ErrorCode.AUTH_006, "Only presenter can approve viewers");
+            return;
+        }
+        
+        String viewerSessionId = json.has("viewerSessionId") ? json.get("viewerSessionId").asText() : null;
+        if (viewerSessionId == null) {
+            sendError(session, ErrorCode.VAL_002, "Missing viewerSessionId");
+            return;
+        }
+        
+        ReactiveRoom room = rooms.get(roomId);
+        if (room == null) {
+            sendError(session, ErrorCode.ROOM_001, "Room not found");
+            return;
+        }
+        
+        ReactiveRoom.PendingViewer pending = room.getPendingViewer(viewerSessionId);
+        if (pending == null) {
+            sendError(session, ErrorCode.ROOM_005, "Viewer not found in pending list");
+            return;
+        }
+        
+        // Remove from pending
+        room.removePendingViewer(viewerSessionId);
+        
+        // Add to room
+        addViewerToRoom(room, viewerSessionId, pending.username(), pending.session(), pending.sink(), ipAddress);
+        
+        // Log audit
+        auditService.logViewerApproved(username, sessionId, roomId, viewerSessionId, ipAddress).subscribe();
+        
+        logger.info("✅ Viewer {} approved by presenter in room {}", viewerSessionId, roomId);
+        
+        // Send confirmation to presenter
+        String response = String.format(
+            "{\"type\":\"viewer-approved\",\"viewerSessionId\":\"%s\",\"pendingCount\":%d}",
+            viewerSessionId, room.getPendingViewerCount()
+        );
+        sendTextToSession(session, response);
+    }
+    
+    /**
+     * Deny a pending viewer (presenter only)
+     */
+    private void handleDenyViewer(WebSocketSession session, JsonNode json) {
+        String sessionId = session.getId();
+        String role = sessionRoles.get(sessionId);
+        String roomId = sessionToRoom.get(sessionId);
+        String ipAddress = sessionIpAddresses.getOrDefault(sessionId, "unknown");
+        AuthenticatedUser user = sessionUsers.get(sessionId);
+        String username = user != null ? user.username() : "anonymous";
+        
+        // Only presenter can deny
+        if (!"presenter".equals(role)) {
+            sendError(session, ErrorCode.AUTH_006, "Only presenter can deny viewers");
+            return;
+        }
+        
+        String viewerSessionId = json.has("viewerSessionId") ? json.get("viewerSessionId").asText() : null;
+        if (viewerSessionId == null) {
+            sendError(session, ErrorCode.VAL_002, "Missing viewerSessionId");
+            return;
+        }
+        
+        ReactiveRoom room = rooms.get(roomId);
+        if (room == null) {
+            sendError(session, ErrorCode.ROOM_001, "Room not found");
+            return;
+        }
+        
+        ReactiveRoom.PendingViewer pending = room.getPendingViewer(viewerSessionId);
+        if (pending == null) {
+            sendError(session, ErrorCode.ROOM_005, "Viewer not found in pending list");
+            return;
+        }
+        
+        // Remove from pending
+        room.removePendingViewer(viewerSessionId);
+        
+        // Clean up session mappings
+        sessionToRoom.remove(viewerSessionId);
+        sessionRoles.remove(viewerSessionId);
+        
+        // Notify denied viewer
+        try {
+            if (pending.sink() != null && pending.session() != null) {
+                WebSocketMessage msg = pending.session().textMessage(
+                    "{\"type\":\"access-denied\",\"message\":\"Your request to join was denied by the host\"}"
+                );
+                pending.sink().tryEmitNext(msg);
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to notify denied viewer: {}", e.getMessage());
+        }
+        
+        // Log audit
+        auditService.logViewerDenied(username, sessionId, roomId, viewerSessionId, ipAddress).subscribe();
+        
+        logger.info("❌ Viewer {} denied by presenter in room {}", viewerSessionId, roomId);
+        
+        // Send confirmation to presenter
+        String response = String.format(
+            "{\"type\":\"viewer-denied\",\"viewerSessionId\":\"%s\",\"pendingCount\":%d}",
+            viewerSessionId, room.getPendingViewerCount()
+        );
+        sendTextToSession(session, response);
+    }
+    
+    /**
+     * Ban a viewer (presenter only) - they cannot rejoin
+     */
+    private void handleBanViewer(WebSocketSession session, JsonNode json) {
+        String sessionId = session.getId();
+        String role = sessionRoles.get(sessionId);
+        String roomId = sessionToRoom.get(sessionId);
+        String ipAddress = sessionIpAddresses.getOrDefault(sessionId, "unknown");
+        AuthenticatedUser user = sessionUsers.get(sessionId);
+        String username = user != null ? user.username() : "anonymous";
+        
+        // Only presenter can ban
+        if (!"presenter".equals(role)) {
+            sendError(session, ErrorCode.AUTH_006, "Only presenter can ban viewers");
+            return;
+        }
+        
+        String viewerSessionId = json.has("viewerSessionId") ? json.get("viewerSessionId").asText() : null;
+        if (viewerSessionId == null) {
+            sendError(session, ErrorCode.VAL_002, "Missing viewerSessionId");
+            return;
+        }
+        
+        ReactiveRoom room = rooms.get(roomId);
+        if (room == null) {
+            sendError(session, ErrorCode.ROOM_001, "Room not found");
+            return;
+        }
+        
+        // Check if viewer is in room
+        if (!room.hasViewer(viewerSessionId)) {
+            sendError(session, ErrorCode.ROOM_005, "Viewer not in room");
+            return;
+        }
+        
+        // Get viewer's sink before removing
+        Sinks.Many<WebSocketMessage> viewerSink = room.getViewerSinks().get(viewerSessionId)
+            .map(info -> sessionSinks.get(viewerSessionId))
+            .orElse(null);
+        WebSocketSession viewerSession = room.getViewerSinks().get(viewerSessionId)
+            .map(info -> info.session())
+            .orElse(null);
+        
+        // Ban the viewer
+        room.banSession(viewerSessionId);
+        room.removeViewer(viewerSessionId);
+        
+        // Clean up session mappings
+        sessionToRoom.remove(viewerSessionId);
+        sessionRoles.remove(viewerSessionId);
+        
+        // Notify banned viewer
+        try {
+            if (viewerSink != null && viewerSession != null) {
+                WebSocketMessage msg = viewerSession.textMessage(
+                    "{\"type\":\"banned\",\"message\":\"You have been banned from this room\"}"
+                );
+                viewerSink.tryEmitNext(msg);
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to notify banned viewer: {}", e.getMessage());
+        }
+        
+        // Log audit
+        auditService.logViewerBanned(username, sessionId, roomId, viewerSessionId, ipAddress).subscribe();
+        
+        logger.info("🚫 Viewer {} banned from room {}", viewerSessionId, roomId);
+        
+        // Send confirmation to presenter
+        String response = String.format(
+            "{\"type\":\"viewer-banned\",\"viewerSessionId\":\"%s\",\"viewerCount\":%d}",
+            viewerSessionId, room.getViewerCount()
+        );
+        sendTextToSession(session, response);
+    }
+    
+    /**
+     * Kick a viewer (presenter only) - they can rejoin
+     */
+    private void handleKickViewer(WebSocketSession session, JsonNode json) {
+        String sessionId = session.getId();
+        String role = sessionRoles.get(sessionId);
+        String roomId = sessionToRoom.get(sessionId);
+        String ipAddress = sessionIpAddresses.getOrDefault(sessionId, "unknown");
+        AuthenticatedUser user = sessionUsers.get(sessionId);
+        String username = user != null ? user.username() : "anonymous";
+        
+        // Only presenter can kick
+        if (!"presenter".equals(role)) {
+            sendError(session, ErrorCode.AUTH_006, "Only presenter can kick viewers");
+            return;
+        }
+        
+        String viewerSessionId = json.has("viewerSessionId") ? json.get("viewerSessionId").asText() : null;
+        if (viewerSessionId == null) {
+            sendError(session, ErrorCode.VAL_002, "Missing viewerSessionId");
+            return;
+        }
+        
+        ReactiveRoom room = rooms.get(roomId);
+        if (room == null) {
+            sendError(session, ErrorCode.ROOM_001, "Room not found");
+            return;
+        }
+        
+        // Check if viewer is in room
+        if (!room.hasViewer(viewerSessionId)) {
+            sendError(session, ErrorCode.ROOM_005, "Viewer not in room");
+            return;
+        }
+        
+        // Get viewer's sink before removing
+        Sinks.Many<WebSocketMessage> viewerSink = room.getViewerSinks().get(viewerSessionId)
+            .map(info -> sessionSinks.get(viewerSessionId))
+            .orElse(null);
+        WebSocketSession viewerSession = room.getViewerSinks().get(viewerSessionId)
+            .map(info -> info.session())
+            .orElse(null);
+        
+        // Remove viewer (not ban)
+        room.removeViewer(viewerSessionId);
+        
+        // Clean up session mappings
+        sessionToRoom.remove(viewerSessionId);
+        sessionRoles.remove(viewerSessionId);
+        
+        // Notify kicked viewer
+        try {
+            if (viewerSink != null && viewerSession != null) {
+                WebSocketMessage msg = viewerSession.textMessage(
+                    "{\"type\":\"kicked\",\"message\":\"You have been removed from this room\"}"
+                );
+                viewerSink.tryEmitNext(msg);
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to notify kicked viewer: {}", e.getMessage());
+        }
+        
+        // Log audit
+        auditService.logViewerKicked(username, sessionId, roomId, viewerSessionId, ipAddress).subscribe();
+        
+        logger.info("👢 Viewer {} kicked from room {}", viewerSessionId, roomId);
+        
+        // Send confirmation to presenter
+        String response = String.format(
+            "{\"type\":\"viewer-kicked\",\"viewerSessionId\":\"%s\",\"viewerCount\":%d}",
+            viewerSessionId, room.getViewerCount()
+        );
+        sendTextToSession(session, response);
     }
     
     /**
@@ -362,10 +895,22 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
      */
     private void handleDisconnect(WebSocketSession session) {
         String sessionId = session.getId();
-        logger.info("🚪 Session disconnected: {}", sessionId);
+        String ipAddress = sessionIpAddresses.getOrDefault(sessionId, "unknown");
+        AuthenticatedUser user = sessionUsers.get(sessionId);
+        String username = user != null ? user.username() : "anonymous";
+        
+        logger.info("🚪 Session disconnected: {} (user: {})", sessionId, username);
         
         removeSessionFromRoom(sessionId);
         sessionSinks.remove(sessionId);
+        
+        // Clean up security tracking
+        sessionUsers.remove(sessionId);
+        sessionIpAddresses.remove(sessionId);
+        rateLimitService.removeSession(sessionId);
+        
+        // Log disconnect
+        auditService.logSessionDisconnected(username, sessionId, ipAddress).subscribe();
     }
     
     /**
@@ -451,23 +996,32 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
     }
     
     /**
-     * Send error message to a session
+     * Send error message to a session with error code
      */
-    private void sendError(WebSocketSession session, String errorMessage) {
+    private void sendError(WebSocketSession session, ErrorCode errorCode, String errorMessage) {
         String response = String.format(
-            "{\"type\":\"error\",\"message\":\"%s\"}",
+            "{\"type\":\"error\",\"code\":\"%s\",\"message\":\"%s\"}",
+            errorCode.getCode(),
             errorMessage.replace("\"", "\\\"")
         );
         sendTextToSession(session, response);
     }
     
     /**
+     * Send error message to a session (legacy method for backwards compatibility)
+     */
+    private void sendError(WebSocketSession session, String errorMessage) {
+        sendError(session, ErrorCode.GENERAL, errorMessage);
+    }
+    
+    /**
      * Create welcome message
      */
-    private String createWelcomeMessage(String sessionId) {
+    private String createWelcomeMessage(String sessionId, AuthenticatedUser user) {
+        String username = user != null ? user.username() : "anonymous";
         return String.format(
-            "{\"type\":\"connected\",\"sessionId\":\"%s\",\"message\":\"Connected to ScreenAI Relay Server (WebFlux+Netty)\",\"role\":\"pending\"}",
-            sessionId
+            "{\"type\":\"connected\",\"sessionId\":\"%s\",\"username\":\"%s\",\"message\":\"Connected to ScreenAI Relay Server (WebFlux+Netty)\",\"role\":\"pending\"}",
+            sessionId, username
         );
     }
     
