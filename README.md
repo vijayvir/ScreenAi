@@ -457,3 +457,9 @@ See [SECURITY_TEST.md](SECURITY_TEST.md) for complete security testing guide wit
 
 ---
 
+## 📄 Related Projects
+
+- **[ScreenAI-Client](https://github.com/vijayvir/ScreenAiClient)** - JavaFX desktop client for screen sharing
+
+---
+
