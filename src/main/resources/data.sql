@@ -1,0 +1,7 @@
+-- =====================================================
+-- ScreenAI Initial Data (Development Profile)
+-- =====================================================
+-- NOTE: Admin user is now created by DataInitializer.java
+-- using environment variables ADMIN_USERNAME and ADMIN_PASSWORD
+-- This file is kept for any other initial data that may be needed
+-- =====================================================

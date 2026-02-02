@@ -1,0 +1,67 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Log files
+*.log
+logs/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### OS ###
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+### JavaCV/FFmpeg temporary files ###
+*.mp4
+*.avi
+*.mkv
+*.ts
+*.h264
+
+### Environment-specific configs ###
+application-local.properties
+application-dev.properties
+
+### Environment Variables (NEVER COMMIT!) ###
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+### Temporary files ###
+*.tmp
+*.temp
+*.bak
