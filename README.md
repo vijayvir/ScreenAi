@@ -453,7 +453,3 @@ ScreenAI implements a multi-layered security architecture including:
 
 ---
 
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) file
-
