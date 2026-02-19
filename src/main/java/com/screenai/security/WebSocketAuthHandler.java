@@ -6,15 +6,15 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-import java.net.URI;
 import java.util.Optional;
 
 /**
  * Handles WebSocket authentication by validating JWT tokens.
- * Tokens can be passed via query parameter: ws://host/screenshare?token=JWT
+ * Tokens must be provided via Authorization header: Bearer <JWT>
  */
 @Component
 public class WebSocketAuthHandler {
@@ -30,11 +30,11 @@ public class WebSocketAuthHandler {
     }
 
     /**
-     * Authenticate WebSocket connection from URI query params.
+     * Authenticate WebSocket connection from handshake headers.
      * Returns the authenticated username or empty if authentication fails.
      */
-    public Mono<AuthenticatedUser> authenticate(URI uri, String sessionId, String ipAddress) {
-        String token = extractTokenFromUri(uri);
+    public Mono<AuthenticatedUser> authenticate(HttpHeaders headers, String sessionId, String ipAddress) {
+        String token = extractTokenFromHeaders(headers);
 
         if (token == null || token.isEmpty()) {
             log.debug("No token provided for WebSocket connection");
@@ -59,22 +59,21 @@ public class WebSocketAuthHandler {
     }
 
     /**
-     * Extract token from WebSocket URI query parameters.
+     * Extract bearer token from Authorization header.
      */
-    private String extractTokenFromUri(URI uri) {
-        if (uri == null || uri.getQuery() == null) {
+    private String extractTokenFromHeaders(HttpHeaders headers) {
+        if (headers == null) {
             return null;
         }
 
-        String query = uri.getQuery();
-        for (String param : query.split("&")) {
-            String[] keyValue = param.split("=", 2);
-            if (keyValue.length == 2 && "token".equals(keyValue[0])) {
-                return keyValue[1];
-            }
+        String authHeader = headers.getFirst(HttpHeaders.AUTHORIZATION);
+        if (authHeader == null || authHeader.isBlank()) {
+            return null;
         }
-
-        return null;
+        if (!authHeader.startsWith("Bearer ")) {
+            return null;
+        }
+        return authHeader.substring("Bearer ".length()).trim();
     }
 
     /**

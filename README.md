@@ -2,6 +2,18 @@
 
 A **secure WebSocket relay server** for real-time screen sharing. Built with **Spring Boot WebFlux + Netty** for high-performance, non-blocking video streaming with comprehensive authentication and security features.
 
+> **📖 For detailed security documentation, see [SECURITY.md](docs/SECURITY.md)**
+
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/ARCHITECTURE.md) | System architecture, tech stack, project structure, database schema, design decisions |
+| [API Reference](docs/API.md) | Complete REST API + WebSocket protocol documentation with examples |
+| [Setup Guide](docs/SETUP.md) | Installation, build, run, production deployment (PostgreSQL, nginx, systemd) |
+| [Configuration](docs/CONFIGURATION.md) | Full reference for all `application.yml` settings and environment variables |
+| [Security](docs/SECURITY.md) | Multi-layered security architecture, JWT, rate limiting, encryption, audit logging |
+
 ## 🎯 Overview
 
 ScreenAI-Server acts as a secure relay hub between presenters (screen sharers) and viewers:
@@ -38,20 +50,23 @@ ScreenAI-Server acts as a secure relay hub between presenters (screen sharers) a
 - ✅ **Auto Backpressure** - Handles slow consumers gracefully
 - ✅ **Low Resource Usage** - Minimal CPU (~5-15%), server only relays data
 
-### 🔐 Security Features
-- ✅ **JWT Authentication** - Secure token-based auth (15 min access + 7 day refresh tokens)
-- ✅ **User Registration** - Secure account creation with encrypted passwords (BCrypt)
-- ✅ **Account Lockout** - 5 failed attempts → 15 min lock
-- ✅ **Password Policy** - Min 8 chars, uppercase, lowercase, digit, special char
-- ✅ **Rate Limiting** - Message rate limiting per session/IP
-- ✅ **IP Blocking** - Automatic blocking of suspicious IPs
-- ✅ **Room Password Protection** - Optional password for private rooms
-- ✅ **Access Codes** - Auto-generated codes for password-protected rooms
-- ✅ **Viewer Approval** - Optional manual approval for viewers joining
-- ✅ **Viewer Management** - Kick/ban viewers from rooms
-- ✅ **Audit Logging** - All security events recorded with masked usernames
-- ✅ **Role-Based Access** - ADMIN/USER roles for API endpoints
-- ✅ **Token Refresh** - Automatic token renewal without re-login
+### 🔐 Security Features ([full docs](SECURITY.md))
+- ✅ **JWT Authentication** - HMAC-SHA256 signed tokens (15 min access + 7 day opaque refresh tokens with rotation)
+- ✅ **User Registration** - Secure account creation with BCrypt hashing (cost factor 12)
+- ✅ **Account Lockout** - 5 failed attempts → 15 min lock (configurable)
+- ✅ **Password Policy** - Min 8 chars, uppercase, lowercase, digit, special char (configurable)
+- ✅ **Rate Limiting** - Sliding window per session (100 msg/sec) and per IP (10 rooms/hour)
+- ✅ **IP Blocking** - Dual-layer (memory + DB) automatic blocking of suspicious IPs
+- ✅ **Room Password Protection** - SHA-256 + salt hashing with timing-safe comparison
+- ✅ **Access Codes** - 8-char alphanumeric codes (24-hour expiry) for password-protected rooms
+- ✅ **Viewer Approval** - Optional manual approve/deny workflow for viewers
+- ✅ **Viewer Management** - Kick/ban viewers from rooms (banned sessions cannot rejoin)
+- ✅ **Audit Logging** - 25+ event types with privacy-masked usernames and severity levels
+- ✅ **Role-Based Access** - ADMIN/USER roles with URL-pattern and method-level enforcement
+- ✅ **Token Refresh** - Automatic token renewal with refresh token rotation
+- ✅ **Security Headers** - CSP, X-XSS-Protection, Permissions-Policy, and more
+- ✅ **Input Validation** - Centralized sanitization and validation for all user inputs
+- ✅ **Encrypted Client Storage** - AES-256-GCM with PBKDF2 key derivation for token persistence
 
 ---
 
@@ -68,16 +83,24 @@ java -version
 
 ### Run the Server
 
-**Option 1: Using Maven Wrapper**
+**Option 1: Quick Start (dev mode — no admin account, random JWT key)**
 ```bash
-chmod +x mvnw
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
-**Option 2: Using pre-built JAR**
+**Option 2: With Admin Account + Persistent JWT**
+```bash
+export JWT_SECRET="your-super-secure-256-bit-secret-key-here!!"
+export ADMIN_PASSWORD="Admin@123"
+mvn spring-boot:run
+```
+
+**Option 3: Using pre-built JAR**
 ```bash
 java -jar target/screenai-server-1.0.0.jar
 ```
+
+> **Note:** If `JWT_SECRET` is not set, a random key is generated on each startup (tokens won't survive restarts). If `ADMIN_PASSWORD` is not set, no admin user is created.
 
 ### Server Started!
 
@@ -403,14 +426,30 @@ wscat -c ws://localhost:8080/screenshare
 
 ---
 
-## 🛡️ Security Best Practices
+## 🛡️ Security
 
-1. **Change JWT Secret** - Use a strong 256-bit secret in production
-2. **Use HTTPS/WSS** - Enable TLS in production
-3. **Configure CORS** - Restrict allowed origins
-4. **Database** - Use PostgreSQL/MySQL in production instead of H2
-5. **Monitoring** - Enable audit log monitoring
-6. **Rate Limits** - Adjust based on expected traffic
+ScreenAI implements a multi-layered security architecture including:
+
+| Layer | Features |
+|-------|----------|
+| **Network** | IP blocking, rate limiting (sliding window), connection throttling, security headers |
+| **Authentication** | JWT access tokens (HS256, 15 min), opaque refresh tokens (7 day), BCrypt password hashing (cost 12) |
+| **Authorization** | Role-based access control (USER/ADMIN), room-level permissions, viewer approval workflow |
+| **Data Protection** | AES-256-GCM encrypted client storage, SHA-256 + salt room passwords (timing-safe), input validation |
+| **Audit** | 25+ event types, 5 severity levels, privacy-masked usernames, queryable by user/type/severity |
+
+> **Full details →** [SECURITY.md](docs/SECURITY.md)
+
+### Security Best Practices for Production
+
+1. **Change JWT Secret** — Set `JWT_SECRET` env var with a strong 256-bit+ key (if not set, a random key is generated per startup)
+2. **Set Admin Password** — Set `ADMIN_PASSWORD` env var to bootstrap an admin account (skipped if blank)
+3. **Configure CORS** — Restrict `cors.allowed-origins` to your domains
+4. **Database** — Replace H2 with PostgreSQL/MySQL for persistence
+5. **Encryption Key** — Set `TOKEN_ENCRYPTION_KEY` in client `.env` with a unique 32-char key
+6. **Monitoring** — Set up alerts on `CRITICAL` and `ERROR` severity audit events
+7. **Rate Limits** — Tune based on expected traffic patterns
+8. **Reverse Proxy** — Place behind nginx/Caddy; don't expose port 8080 directly
 
 ---
 

@@ -7,6 +7,7 @@ import java.util.Enumeration;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * Main application class for ScreenAI-Server
@@ -24,6 +25,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class ScreenAIApplication implements CommandLineRunner {
 
+	@Value("${server.port:8080}")
+	private int serverPort;
+
 	public static void main(String[] args) {
 		SpringApplication.run(ScreenAIApplication.class, args);
 	}
@@ -38,22 +42,22 @@ public class ScreenAIApplication implements CommandLineRunner {
 		
 		// Show local access URL
 		System.out.println("📍 WebSocket Endpoint:");
-		System.out.println("   Local:   ws://localhost:8080/screenshare");
+		System.out.println("   Local:   ws://localhost:" + serverPort + "/screenshare");
 		
 		// Show network IP addresses for remote access
 		String networkIp = getNetworkIp();
 		if (networkIp != null) {
-			System.out.println("   Network: ws://" + networkIp + ":8080/screenshare");
+			System.out.println("   Network: ws://" + networkIp + ":" + serverPort + "/screenshare");
 			System.out.println("");
 			System.out.println("🌐 Network Access Instructions:");
 			System.out.println("   1. Connect client device to same network");
-			System.out.println("   2. Use network address: " + networkIp + ":8080");
+			System.out.println("   2. Use network address: " + networkIp + ":" + serverPort);
 		} else {
 			System.out.println("   ⚠️  Network IP not detected - check connection");
 		}
 		
 		System.out.println("");
-		System.out.println("� Server Mode: WebFlux + Netty (Non-Blocking)");
+		System.out.println("Server Mode: WebFlux + Netty (Non-Blocking)");
 		System.out.println("   ✅ Reactive WebSocket handling");
 		System.out.println("   ✅ Non-blocking I/O via Netty");
 		System.out.println("   ✅ Automatic backpressure handling");
@@ -61,7 +65,7 @@ public class ScreenAIApplication implements CommandLineRunner {
 		System.out.println("   ✅ Room management enabled");
 		System.out.println("");
 		System.out.println("🧪 Test with wscat:");
-		System.out.println("   wscat -c ws://localhost:8080/screenshare");
+		System.out.println("   wscat -c ws://localhost:" + serverPort + "/screenshare");
 		System.out.println("   > {\"type\":\"create-room\",\"roomId\":\"test\"}");
 		System.out.println("");
 		System.out.println("═══════════════════════════════════════════════════════════");

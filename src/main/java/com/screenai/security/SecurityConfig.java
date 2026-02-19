@@ -102,9 +102,38 @@ public class SecurityConfig {
                 
                 // Add security headers
                 .headers(headers -> headers
-                        .frameOptions(frameOptions -> frameOptions.disable()) // Allow H2 console
-                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'"))
+                        // X-Frame-Options: Prevents clickjacking attacks
+                        // Note: Disabled for H2 console access in development
+                        .frameOptions(frameOptions -> frameOptions.disable())
+                        
+                        // Content-Security-Policy: Prevents XSS and data injection attacks
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(
+                                "default-src 'self'; " +
+                                "script-src 'self'; " +
+                                "style-src 'self' 'unsafe-inline'; " +
+                                "img-src 'self' data:; " +
+                                "font-src 'self'; " +
+                                "connect-src 'self' ws: wss:; " +
+                                "frame-ancestors 'self'"))
+                        
+                        // Disable caching for API responses (security-sensitive data)
                         .cache(cache -> cache.disable())
+                        
+                        // X-Content-Type-Options: Prevents MIME type sniffing
+                        .contentTypeOptions(contentTypeOptions -> {})
+                        
+                        // X-XSS-Protection: Enable browser XSS filtering
+                        .xssProtection(xss -> xss.headerValue(org.springframework.security.web.server.header.XXssProtectionServerHttpHeadersWriter.HeaderValue.ENABLED_MODE_BLOCK))
+                        
+                        // Referrer-Policy: Control referrer information
+                        .referrerPolicy(referrer -> referrer.policy(org.springframework.security.web.server.header.ReferrerPolicyServerHttpHeadersWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                        
+                        // Permissions-Policy: Restrict browser features
+                        .permissionsPolicy(permissions -> permissions.policy(
+                                "geolocation=(), " +
+                                "microphone=(), " +
+                                "camera=(), " +
+                                "payment=()"))
                 )
                 
                 .build();

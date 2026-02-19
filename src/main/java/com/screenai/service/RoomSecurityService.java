@@ -3,6 +3,7 @@ package com.screenai.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -21,7 +22,7 @@ public class RoomSecurityService {
 
     private static final Logger log = LoggerFactory.getLogger(RoomSecurityService.class);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    private static final int SALT_LENGTH = 16;
+    private static final BCryptPasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder(12);
     private static final String ACCESS_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Avoid confusing chars
 
     private final int accessCodeExpirationHours;
@@ -33,39 +34,52 @@ public class RoomSecurityService {
     }
 
     /**
-     * Generate a random salt for password hashing.
+     * Hash a password.
+     * Uses BCrypt by default; supports legacy salted SHA-256 when salt is provided.
      */
-    public String generateSalt() {
-        byte[] salt = new byte[SALT_LENGTH];
-        SECURE_RANDOM.nextBytes(salt);
-        return Base64.getEncoder().encodeToString(salt);
+    public String hashPassword(String password, String salt) {
+        if (salt == null || salt.isBlank()) {
+            // Current default: BCrypt with embedded salt/work factor.
+            return PASSWORD_ENCODER.encode(password);
+        }
+        // Legacy fallback for older in-memory rooms that used SHA-256+salt.
+        return hashPasswordLegacySha256(password, salt);
     }
 
     /**
-     * Hash a password with the given salt using SHA-256.
+     * Verify a password against stored hash.
      */
-    public String hashPassword(String password, String salt) {
+    public boolean verifyPassword(String inputPassword, String storedHash, String storedSalt) {
+        if (inputPassword == null || storedHash == null) {
+            return false;
+        }
+
+        // BCrypt hashes include salt and cost in the hash itself.
+        if (isBcryptHash(storedHash)) {
+            return PASSWORD_ENCODER.matches(inputPassword, storedHash);
+        }
+
+        // Legacy SHA-256 + salt verification for backward compatibility.
+        if (storedSalt == null || storedSalt.isBlank()) {
+            return false;
+        }
+        String inputHash = hashPasswordLegacySha256(inputPassword, storedSalt);
+        return timingSafeEquals(inputHash, storedHash);
+    }
+
+    private boolean isBcryptHash(String hash) {
+        return hash.startsWith("$2a$") || hash.startsWith("$2b$") || hash.startsWith("$2y$");
+    }
+
+    private String hashPasswordLegacySha256(String password, String salt) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            // Combine salt and password
             String combined = salt + password;
             byte[] hash = digest.digest(combined.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 algorithm not available", e);
         }
-    }
-
-    /**
-     * Verify a password against stored hash using timing-safe comparison.
-     */
-    public boolean verifyPassword(String inputPassword, String storedHash, String storedSalt) {
-        if (inputPassword == null || storedHash == null || storedSalt == null) {
-            return false;
-        }
-
-        String inputHash = hashPassword(inputPassword, storedSalt);
-        return timingSafeEquals(inputHash, storedHash);
     }
 
     /**
@@ -124,12 +138,12 @@ public class RoomSecurityService {
     }
 
     /**
-     * Create password hash result containing both hash and salt.
+     * Create a password hash result for new rooms.
+     * BCrypt embeds salt in the hash, so the explicit salt is null.
      */
     public PasswordHashResult createPasswordHash(String password) {
-        String salt = generateSalt();
-        String hash = hashPassword(password, salt);
-        return new PasswordHashResult(hash, salt);
+        String hash = PASSWORD_ENCODER.encode(password);
+        return new PasswordHashResult(hash, null);
     }
 
     /**

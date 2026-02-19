@@ -36,6 +36,15 @@ public class JwtService {
             @Value("${security.jwt.refresh-token-expiration}") long refreshTokenExpiration,
             @Value("${security.jwt.issuer}") String issuer) {
         
+        // If no secret configured, generate a random one (dev mode — tokens won't survive restarts)
+        if (secret == null || secret.isBlank()) {
+            byte[] randomKey = new byte[64];
+            SECURE_RANDOM.nextBytes(randomKey);
+            secret = java.util.Base64.getEncoder().encodeToString(randomKey);
+            log.warn("⚠️  JWT_SECRET not set — generated random key. Tokens will NOT survive server restarts.");
+            log.warn("⚠️  Set JWT_SECRET env var for production use.");
+        }
+        
         // Ensure secret is at least 256 bits for HS256
         if (secret.length() < 32) {
             throw new IllegalArgumentException("JWT secret must be at least 256 bits (32 characters)");

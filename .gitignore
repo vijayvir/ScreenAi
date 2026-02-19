@@ -39,9 +39,15 @@ build/
 ### OS ###
 .DS_Store
 Thumbs.db
+desktop.ini
 *.swp
 *.swo
 *~
+
+### H2 Database ###
+*.db
+*.mv.db
+*.trace.db
 
 ### JavaCV/FFmpeg temporary files ###
 *.mp4

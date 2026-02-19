@@ -111,13 +111,13 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
         Sinks.Many<WebSocketMessage> outboundSink = Sinks.many().multicast().onBackpressureBuffer(1024);
         sessionSinks.put(sessionId, outboundSink);
         
-        // Authenticate via token in query param - REQUIRED
-        return authHandler.authenticate(session.getHandshakeInfo().getUri(), sessionId, ipAddress)
+        // Authenticate via Authorization header - REQUIRED
+        return authHandler.authenticate(session.getHandshakeInfo().getHeaders(), sessionId, ipAddress)
             .switchIfEmpty(Mono.defer(() -> {
                 // No valid authentication - reject the connection
                 logger.warn("🚫 Unauthenticated WebSocket connection rejected: {} from IP: {}", sessionId, ipAddress);
                 auditService.logConnectionBlocked(ipAddress, "missing_or_invalid_token").subscribe();
-                sendErrorAndClose(session, ErrorCode.AUTH_001, "Authentication required. Please provide a valid JWT token via ?token= query parameter.");
+                sendErrorAndClose(session, ErrorCode.AUTH_001, "Authentication required. Provide a valid JWT via Authorization: Bearer <token>.");
                 return Mono.empty();
             }))
             .flatMap(user -> {

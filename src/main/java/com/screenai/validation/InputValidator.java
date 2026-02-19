@@ -138,12 +138,57 @@ public class InputValidator {
 
     /**
      * Check if password meets basic requirements (non-throwing version).
+     * Basic check for length only.
      */
     public boolean isValidPassword(String password) {
         return password != null && 
                password.length() >= 8 && 
                password.length() <= MAX_PASSWORD_LENGTH;
     }
+    
+    /**
+     * Validate password strength with detailed requirements.
+     * Password must:
+     * - Be at least 8 characters
+     * - Contain at least one uppercase letter
+     * - Contain at least one lowercase letter  
+     * - Contain at least one digit
+     * - Not exceed maximum length
+     * 
+     * @return PasswordValidationResult with success status and error message
+     */
+    public PasswordValidationResult validatePasswordStrength(String password) {
+        if (password == null || password.isEmpty()) {
+            return new PasswordValidationResult(false, "Password is required");
+        }
+        
+        if (password.length() < 8) {
+            return new PasswordValidationResult(false, "Password must be at least 8 characters long");
+        }
+        
+        if (password.length() > MAX_PASSWORD_LENGTH) {
+            return new PasswordValidationResult(false, "Password exceeds maximum length of " + MAX_PASSWORD_LENGTH);
+        }
+        
+        if (!password.matches(".*[A-Z].*")) {
+            return new PasswordValidationResult(false, "Password must contain at least one uppercase letter");
+        }
+        
+        if (!password.matches(".*[a-z].*")) {
+            return new PasswordValidationResult(false, "Password must contain at least one lowercase letter");
+        }
+        
+        if (!password.matches(".*\\d.*")) {
+            return new PasswordValidationResult(false, "Password must contain at least one digit");
+        }
+        
+        return new PasswordValidationResult(true, null);
+    }
+    
+    /**
+     * Result of password validation with success status and optional error message.
+     */
+    public record PasswordValidationResult(boolean valid, String errorMessage) {}
 
     // Getters for limits (for configuration)
     public int getMaxRoomIdLength() {

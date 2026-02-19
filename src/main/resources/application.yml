@@ -46,8 +46,9 @@ cors:
 # =====================================================
 security:
   jwt:
-    # Secret key for JWT signing (override in production via JWT_SECRET env var)
-    secret: ${JWT_SECRET:screenai-dev-secret-key-change-in-production-minimum-256-bits}
+    # Secret key for JWT signing — MUST be set via JWT_SECRET env var in production
+    # WARNING: The default is for dev only and will generate a random key on each startup
+    secret: ${JWT_SECRET:}
     # Access token expiration (15 minutes)
     access-token-expiration: ${ACCESS_TOKEN_EXPIRATION:900000}
     # Refresh token expiration (7 days)
@@ -97,9 +98,21 @@ security:
 # Admin Configuration
 # =====================================================
 admin:
-  # Default admin credentials (override in production)
+  # Default admin credentials — set via ADMIN_USERNAME / ADMIN_PASSWORD env vars
   username: ${ADMIN_USERNAME:admin}
-  password: ${ADMIN_PASSWORD:admin123}
+  password: ${ADMIN_PASSWORD:}
+
+# =====================================================
+# Management / Actuator
+# =====================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
 
 # Logging configuration
 logging:
