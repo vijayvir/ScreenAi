@@ -68,6 +68,9 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
     // Session to IP address mapping
     private final Map<String, String> sessionIpAddresses = new ConcurrentHashMap<>();
     
+    // Active sessions (for server-side broadcast from ScreenCaptureService)
+    private final Map<String, WebSocketSession> activeSessions = new ConcurrentHashMap<>();
+    
     // Security services
     private final WebSocketAuthHandler authHandler;
     private final RoomSecurityService roomSecurityService;
@@ -122,6 +125,7 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
             }))
             .flatMap(user -> {
                 sessionUsers.put(sessionId, user);
+                activeSessions.put(sessionId, session);
                 logger.info("✅ Authenticated WebSocket user: {}", user.username());
                 
                 // Send welcome message
@@ -908,6 +912,7 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
         
         removeSessionFromRoom(sessionId);
         sessionSinks.remove(sessionId);
+        activeSessions.remove(sessionId);
         
         // Clean up security tracking
         sessionUsers.remove(sessionId);
@@ -1089,6 +1094,36 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
         }
         
         return false;
+    }
+    
+    /**
+     * Broadcast a server-captured screen frame to all connected sessions.
+     * Used by ScreenCaptureService to push JPEG frames to all viewers.
+     * @param frameData Base64 encoded JPEG image data
+     */
+    public void broadcastScreenFrame(String frameData) {
+        if (activeSessions.isEmpty()) {
+            return;
+        }
+        String message = "{\"type\":\"frame\",\"data\":\"data:image/jpeg;base64," + frameData + "\"}";
+        activeSessions.forEach((sessionId, session) -> {
+            Sinks.Many<WebSocketMessage> sink = sessionSinks.get(sessionId);
+            if (sink != null) {
+                try {
+                    WebSocketMessage msg = session.textMessage(message);
+                    sink.tryEmitNext(msg);
+                } catch (Exception e) {
+                    logger.debug("Failed to broadcast frame to session {}: {}", sessionId, e.getMessage());
+                }
+            }
+        });
+    }
+    
+    /**
+     * Returns the number of currently connected WebSocket sessions.
+     */
+    public int getViewerCount() {
+        return activeSessions.size();
     }
     
     /**

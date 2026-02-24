@@ -8,6 +8,8 @@ server:
 spring:
   application:
     name: ScreenAI
+  main:
+    headless: false
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
   thymeleaf:

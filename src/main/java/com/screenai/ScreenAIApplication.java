@@ -7,7 +7,10 @@ import java.util.Enumeration;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+
+import com.screenai.service.ScreenCaptureService;
 
 /**
  * Main application class for ScreenAI-Server
@@ -21,6 +24,7 @@ import org.springframework.beans.factory.annotation.Value;
  * - Reactive WebSockets for real-time binary data relay
  * - Room-based session management
  * - Automatic backpressure handling
+ * - JavaCV screen capture with JPEG frame broadcast
  */
 @SpringBootApplication
 public class ScreenAIApplication implements CommandLineRunner {
@@ -28,8 +32,14 @@ public class ScreenAIApplication implements CommandLineRunner {
 	@Value("${server.port:8080}")
 	private int serverPort;
 
+	@Autowired
+	private ScreenCaptureService screenCaptureService;
+
 	public static void main(String[] args) {
-		SpringApplication.run(ScreenAIApplication.class, args);
+		System.setProperty("java.awt.headless", "false");
+		SpringApplication app = new SpringApplication(ScreenAIApplication.class);
+		app.setHeadless(false);
+		app.run(args);
 	}
 
 	@Override
@@ -43,11 +53,14 @@ public class ScreenAIApplication implements CommandLineRunner {
 		// Show local access URL
 		System.out.println("📍 WebSocket Endpoint:");
 		System.out.println("   Local:   ws://localhost:" + serverPort + "/screenshare");
+		System.out.println("📺 Viewer Page:");
+		System.out.println("   Local:   http://localhost:" + serverPort + "/");
 		
 		// Show network IP addresses for remote access
 		String networkIp = getNetworkIp();
 		if (networkIp != null) {
 			System.out.println("   Network: ws://" + networkIp + ":" + serverPort + "/screenshare");
+			System.out.println("   Network: http://" + networkIp + ":" + serverPort + "/");
 			System.out.println("");
 			System.out.println("🌐 Network Access Instructions:");
 			System.out.println("   1. Connect client device to same network");
@@ -63,6 +76,22 @@ public class ScreenAIApplication implements CommandLineRunner {
 		System.out.println("   ✅ Automatic backpressure handling");
 		System.out.println("   ✅ Binary data relay (no size limits)");
 		System.out.println("   ✅ Room management enabled");
+		System.out.println("");
+
+		// Initialize and start screen capture
+		try {
+			screenCaptureService.initialize();
+			if (screenCaptureService.isInitialized()) {
+				screenCaptureService.startCapture();
+				System.out.println("🎥 Screen capture started successfully!");
+				System.out.println("   Capture method: " + screenCaptureService.getCaptureMethod());
+			} else {
+				System.out.println("⚠️  Screen capture could not be initialized");
+			}
+		} catch (Exception e) {
+			System.out.println("⚠️  Screen capture unavailable: " + e.getMessage());
+		}
+
 		System.out.println("");
 		System.out.println("🧪 Test with wscat:");
 		System.out.println("   wscat -c ws://localhost:" + serverPort + "/screenshare");
