@@ -3,7 +3,6 @@ package com.screenai.security;
 import com.screenai.service.JwtService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -39,9 +38,6 @@ public class SecurityConfig {
     private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
 
     private final JwtService jwtService;
-    
-    @Value("${cors.allowed-origins}")
-    private String corsAllowedOrigins;
 
     public SecurityConfig(JwtService jwtService) {
         this.jwtService = jwtService;
@@ -102,38 +98,9 @@ public class SecurityConfig {
                 
                 // Add security headers
                 .headers(headers -> headers
-                        // X-Frame-Options: Prevents clickjacking attacks
-                        // Note: Disabled for H2 console access in development
-                        .frameOptions(frameOptions -> frameOptions.disable())
-                        
-                        // Content-Security-Policy: Prevents XSS and data injection attacks
-                        .contentSecurityPolicy(csp -> csp.policyDirectives(
-                                "default-src 'self'; " +
-                                "script-src 'self'; " +
-                                "style-src 'self' 'unsafe-inline'; " +
-                                "img-src 'self' data:; " +
-                                "font-src 'self'; " +
-                                "connect-src 'self' ws: wss:; " +
-                                "frame-ancestors 'self'"))
-                        
-                        // Disable caching for API responses (security-sensitive data)
+                        .frameOptions(frameOptions -> frameOptions.disable()) // Allow H2 console
+                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'"))
                         .cache(cache -> cache.disable())
-                        
-                        // X-Content-Type-Options: Prevents MIME type sniffing
-                        .contentTypeOptions(contentTypeOptions -> {})
-                        
-                        // X-XSS-Protection: Enable browser XSS filtering
-                        .xssProtection(xss -> xss.headerValue(org.springframework.security.web.server.header.XXssProtectionServerHttpHeadersWriter.HeaderValue.ENABLED_MODE_BLOCK))
-                        
-                        // Referrer-Policy: Control referrer information
-                        .referrerPolicy(referrer -> referrer.policy(org.springframework.security.web.server.header.ReferrerPolicyServerHttpHeadersWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
-                        
-                        // Permissions-Policy: Restrict browser features
-                        .permissionsPolicy(permissions -> permissions.policy(
-                                "geolocation=(), " +
-                                "microphone=(), " +
-                                "camera=(), " +
-                                "payment=()"))
                 )
                 
                 .build();
@@ -143,10 +110,15 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // Parse allowed origins from environment variable (comma-separated)
-        List<String> origins = Arrays.asList(corsAllowedOrigins.split(","));
-        log.info("Configuring CORS with allowed origins: {}", origins);
-        configuration.setAllowedOrigins(origins);
+        // Allow origins (configure for production)
+        configuration.setAllowedOrigins(Arrays.asList(
+                "http://localhost:3000",
+                "http://localhost:8080",
+                "https://localhost:8443"
+        ));
+        
+        // Allow all origins in development (uncomment for dev)
+        // configuration.setAllowedOriginPatterns(List.of("*"));
         
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With"));

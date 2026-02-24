@@ -111,20 +111,15 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
         Sinks.Many<WebSocketMessage> outboundSink = Sinks.many().multicast().onBackpressureBuffer(1024);
         sessionSinks.put(sessionId, outboundSink);
         
-        // Authenticate via Authorization header - REQUIRED
-        return authHandler.authenticate(session.getHandshakeInfo().getHeaders(), sessionId, ipAddress)
-            .switchIfEmpty(Mono.defer(() -> {
-                // No valid authentication - reject the connection
-                logger.warn("🚫 Unauthenticated WebSocket connection rejected: {} from IP: {}", sessionId, ipAddress);
-                auditService.logConnectionBlocked(ipAddress, "missing_or_invalid_token").subscribe();
-                sendErrorAndClose(session, ErrorCode.AUTH_001, "Authentication required. Provide a valid JWT via Authorization: Bearer <token>.");
-                return Mono.empty();
-            }))
-            .flatMap(user -> {
+        // Authenticate via token in query param
+        return authHandler.authenticate(session.getHandshakeInfo().getUri(), sessionId, ipAddress)
+            .doOnNext(user -> {
                 sessionUsers.put(sessionId, user);
                 logger.info("✅ Authenticated WebSocket user: {}", user.username());
-                
+            })
+            .then(Mono.defer(() -> {
                 // Send welcome message
+                AuthenticatedUser user = sessionUsers.get(sessionId);
                 sendTextToSession(session, createWelcomeMessage(sessionId, user));
                 
                 // Handle incoming messages
@@ -139,7 +134,7 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
                 
                 // Combine input and output - both must complete
                 return Mono.zip(input, output).then();
-            });
+            }));
     }
     
     /**
@@ -1017,25 +1012,6 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
      */
     private void sendError(WebSocketSession session, String errorMessage) {
         sendError(session, ErrorCode.GENERAL, errorMessage);
-    }
-    
-    /**
-     * Send error message and close the WebSocket session.
-     * Used for authentication failures where connection should not continue.
-     */
-    private void sendErrorAndClose(WebSocketSession session, ErrorCode errorCode, String errorMessage) {
-        String response = String.format(
-            "{\"type\":\"error\",\"code\":\"%s\",\"message\":\"%s\",\"action\":\"close\"}",
-            errorCode.getCode(),
-            errorMessage.replace("\"", "\\\"")
-        );
-        Sinks.Many<WebSocketMessage> sink = sessionSinks.get(session.getId());
-        if (sink != null) {
-            WebSocketMessage message = session.textMessage(response);
-            sink.tryEmitNext(message);
-            // Complete the sink to trigger session close
-            sink.tryEmitComplete();
-        }
     }
     
     /**

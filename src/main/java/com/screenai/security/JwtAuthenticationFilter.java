@@ -80,6 +80,12 @@ public class JwtAuthenticationFilter implements WebFilter {
             return authHeader.substring(BEARER_PREFIX.length());
         }
 
+        // Try query parameter (for WebSocket connections)
+        String tokenParam = request.getQueryParams().getFirst("token");
+        if (tokenParam != null && !tokenParam.isEmpty()) {
+            return tokenParam;
+        }
+
         return null;
     }
 

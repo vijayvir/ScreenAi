@@ -23,11 +23,9 @@ public class AdminBootstrapService {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     
-    @org.springframework.beans.factory.annotation.Value("${admin.username:admin}")
-    private String adminUsername;
-    
-    @org.springframework.beans.factory.annotation.Value("${admin.password:#{null}}")
-    private String adminPassword;
+    // Default admin credentials (should be changed after first login in production)
+    private static final String DEFAULT_ADMIN_USERNAME = "admin";
+    private static final String DEFAULT_ADMIN_PASSWORD = "Admin@123";
     
     public AdminBootstrapService(UserRepository userRepository) {
         this.userRepository = userRepository;
@@ -37,18 +35,13 @@ public class AdminBootstrapService {
     @EventListener(ApplicationReadyEvent.class)
     @Order(100)  // Run after other initialization
     public void createDefaultAdminIfNotExists() {
-        if (adminPassword == null || adminPassword.isBlank()) {
-            log.warn("⚠️  ADMIN_PASSWORD not set — skipping admin user bootstrap.");
-            log.warn("⚠️  Set ADMIN_PASSWORD env var or admin.password in application.yml to create an admin account.");
-            return;
-        }
-        
         log.info("Checking for default admin user...");
         
-        userRepository.findByUsername(adminUsername)
+        userRepository.findByUsername(DEFAULT_ADMIN_USERNAME)
             .flatMap(existingUser -> {
+                // Update existing admin password to ensure it matches (dev mode fix)
                 log.info("Updating admin user password...");
-                existingUser.setPasswordHash(passwordEncoder.encode(adminPassword));
+                existingUser.setPasswordHash(passwordEncoder.encode(DEFAULT_ADMIN_PASSWORD));
                 existingUser.setRole("ADMIN");
                 existingUser.setEnabled(true);
                 existingUser.resetFailedAttempts(); // Unlock if locked
@@ -58,8 +51,8 @@ public class AdminBootstrapService {
             .switchIfEmpty(Mono.defer(() -> {
                 log.info("Creating default admin user...");
                 User admin = new User();
-                admin.setUsername(adminUsername);
-                admin.setPasswordHash(passwordEncoder.encode(adminPassword));
+                admin.setUsername(DEFAULT_ADMIN_USERNAME);
+                admin.setPasswordHash(passwordEncoder.encode(DEFAULT_ADMIN_PASSWORD));
                 admin.setRole("ADMIN");
                 admin.setEnabled(true);
                 

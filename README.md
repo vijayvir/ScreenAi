@@ -1,22 +1,10 @@
 # ScreenAI-Server
 
-A **secure WebSocket relay server** for real-time screen sharing. Built with **Spring Boot WebFlux + Netty** for high-performance, non-blocking video streaming with comprehensive authentication and security features.
-
-> **📖 For detailed security documentation, see [SECURITY.md](docs/SECURITY.md)**
-
-## 📚 Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Architecture](docs/ARCHITECTURE.md) | System architecture, tech stack, project structure, database schema, design decisions |
-| [API Reference](docs/API.md) | Complete REST API + WebSocket protocol documentation with examples |
-| [Setup Guide](docs/SETUP.md) | Installation, build, run, production deployment (PostgreSQL, nginx, systemd) |
-| [Configuration](docs/CONFIGURATION.md) | Full reference for all `application.yml` settings and environment variables |
-| [Security](docs/SECURITY.md) | Multi-layered security architecture, JWT, rate limiting, encryption, audit logging |
+A **lightweight WebSocket relay server** for real-time screen sharing. Built with **Spring Boot WebFlux + Netty** for high-performance, non-blocking video streaming.
 
 ## 🎯 Overview
 
-ScreenAI-Server acts as a secure relay hub between presenters (screen sharers) and viewers:
+ScreenAI-Server acts as a relay hub between presenters (screen sharers) and viewers:
 
 ```
 ┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
@@ -24,18 +12,13 @@ ScreenAI-Server acts as a secure relay hub between presenters (screen sharers) a
 │  (Screen Share) │         │  (WebFlux+Netty)│         │   (Watch Feed)  │
 └────────┬────────┘         └────────┬────────┘         └────────┬────────┘
          │                           │                           │
-         │  1. Login/Register        │                           │
+         │  1. create-room           │                           │
          │──────────────────────────►│                           │
-         │  ◄── JWT Token ──────────│                           │
          │                           │                           │
-         │  2. create-room (+ auth)  │                           │
-         │──────────────────────────►│                           │
-         │  ◄── accessCode ─────────│                           │
-         │                           │                           │
-         │                           │  3. join-room + accessCode│
+         │                           │  2. join-room             │
          │                           │◄──────────────────────────│
          │                           │                           │
-         │  4. Binary video frames   │  5. Relay to viewers      │
+         │  3. Binary video frames   │  4. Relay to viewers      │
          │══════════════════════════►│══════════════════════════►│
          │      (H.264 fMP4)         │      (H.264 fMP4)         │
 ```
@@ -50,23 +33,15 @@ ScreenAI-Server acts as a secure relay hub between presenters (screen sharers) a
 - ✅ **Auto Backpressure** - Handles slow consumers gracefully
 - ✅ **Low Resource Usage** - Minimal CPU (~5-15%), server only relays data
 
-### 🔐 Security Features ([full docs](SECURITY.md))
-- ✅ **JWT Authentication** - HMAC-SHA256 signed tokens (15 min access + 7 day opaque refresh tokens with rotation)
-- ✅ **User Registration** - Secure account creation with BCrypt hashing (cost factor 12)
-- ✅ **Account Lockout** - 5 failed attempts → 15 min lock (configurable)
-- ✅ **Password Policy** - Min 8 chars, uppercase, lowercase, digit, special char (configurable)
-- ✅ **Rate Limiting** - Sliding window per session (100 msg/sec) and per IP (10 rooms/hour)
-- ✅ **IP Blocking** - Dual-layer (memory + DB) automatic blocking of suspicious IPs
-- ✅ **Room Password Protection** - SHA-256 + salt hashing with timing-safe comparison
-- ✅ **Access Codes** - 8-char alphanumeric codes (24-hour expiry) for password-protected rooms
-- ✅ **Viewer Approval** - Optional manual approve/deny workflow for viewers
-- ✅ **Viewer Management** - Kick/ban viewers from rooms (banned sessions cannot rejoin)
-- ✅ **Audit Logging** - 25+ event types with privacy-masked usernames and severity levels
-- ✅ **Role-Based Access** - ADMIN/USER roles with URL-pattern and method-level enforcement
-- ✅ **Token Refresh** - Automatic token renewal with refresh token rotation
-- ✅ **Security Headers** - CSP, X-XSS-Protection, Permissions-Policy, and more
-- ✅ **Input Validation** - Centralized sanitization and validation for all user inputs
-- ✅ **Encrypted Client Storage** - AES-256-GCM with PBKDF2 key derivation for token persistence
+### Security Features
+- ✅ **JWT Authentication** - Secure token-based auth (15 min access + refresh tokens)
+- ✅ **Account Lockout** - 5 failed attempts → 15 min lock
+- ✅ **Password Policy** - Min 8 chars, uppercase, lowercase, digit, special char
+- ✅ **Rate Limiting** - Message rate limiting per session/IP
+- ✅ **IP Blocking** - Automatic blocking of suspicious IPs
+- ✅ **Room Password Protection** - Optional password for private rooms
+- ✅ **Audit Logging** - All security events recorded with masked usernames
+- ✅ **Role-Based Access** - ADMIN/USER roles for API endpoints
 
 ---
 
@@ -83,24 +58,15 @@ java -version
 
 ### Run the Server
 
-**Option 1: Quick Start (dev mode — no admin account, random JWT key)**
-```bash
-mvn spring-boot:run
-```
-
-**Option 2: With Admin Account + Persistent JWT**
-```bash
-export JWT_SECRET="your-super-secure-256-bit-secret-key-here!!"
-export ADMIN_PASSWORD="Admin@123"
-mvn spring-boot:run
-```
-
-**Option 3: Using pre-built JAR**
+**Option 1: Using pre-built JAR**
 ```bash
 java -jar target/screenai-server-1.0.0.jar
 ```
 
-> **Note:** If `JWT_SECRET` is not set, a random key is generated on each startup (tokens won't survive restarts). If `ADMIN_PASSWORD` is not set, no admin user is created.
+**Option 2: Using Maven**
+```bash
+./mvnw spring-boot:run
+```
 
 ### Server Started!
 
@@ -113,82 +79,9 @@ java -jar target/screenai-server-1.0.0.jar
    Local:   ws://localhost:8080/screenshare
    Network: ws://<your-ip>:8080/screenshare
 
-🔐 Security: ENABLED
-   ✅ JWT Authentication
-   ✅ Room password protection
-   ✅ Rate limiting active
-
 🔧 Server Mode: RELAY ONLY
    ✅ Room management enabled
    ✅ Binary data relay enabled
-```
-
----
-
-## 🔐 Authentication API
-
-### Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/register` | POST | Register new user |
-| `/api/auth/login` | POST | Login and get JWT tokens |
-| `/api/auth/refresh` | POST | Refresh access token |
-| `/api/auth/logout` | POST | Invalidate refresh token |
-
-### Register User
-
-**Request:**
-```bash
-curl -X POST http://localhost:8080/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "password": "SecurePass123!"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "User registered successfully",
-  "username": "testuser"
-}
-```
-
-### Login
-
-**Request:**
-```bash
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "password": "SecurePass123!"
-  }'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "username": "testuser",
-  "expiresIn": 900
-}
-```
-
-### Refresh Token
-
-**Request:**
-```bash
-curl -X POST http://localhost:8080/api/auth/refresh \
-  -H "Content-Type: application/json" \
-  -d '{
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }'
 ```
 
 ---
@@ -200,98 +93,52 @@ curl -X POST http://localhost:8080/api/auth/refresh \
 ws://localhost:8080/screenshare
 ```
 
-### Authentication
-Include JWT token in WebSocket connection or send after connecting:
-```json
-{"type": "auth", "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}
-```
-
 ### Message Types
 
 #### 1. Create Room (Presenter)
 
-**Basic Room:**
+**Request:**
 ```json
 {"type": "create-room", "roomId": "my-room-123"}
-```
-
-**Password-Protected Room:**
-```json
-{
-  "type": "create-room",
-  "roomId": "secure-room",
-  "password": "roomPass123",
-  "requireApproval": false
-}
 ```
 
 **Response:**
 ```json
 {
   "type": "room-created",
-  "roomId": "secure-room",
+  "roomId": "my-room-123",
   "role": "presenter",
-  "accessCode": "ABC123",
   "message": "Room created successfully"
 }
 ```
 
 #### 2. Join Room (Viewer)
 
-**Public Room:**
+**Request:**
 ```json
 {"type": "join-room", "roomId": "my-room-123"}
-```
-
-**Password-Protected Room (with access code):**
-```json
-{
-  "type": "join-room",
-  "roomId": "secure-room",
-  "accessCode": "ABC123"
-}
 ```
 
 **Response:**
 ```json
 {
   "type": "room-joined",
-  "roomId": "secure-room",
+  "roomId": "my-room-123",
   "role": "viewer",
   "hasPresenter": true
 }
 ```
 
-#### 3. Viewer Management (Presenter only)
+#### 3. Leave Room
 
-**Approve Viewer:**
-```json
-{"type": "approve-viewer", "viewerSessionId": "session-id-123"}
-```
-
-**Deny Viewer:**
-```json
-{"type": "deny-viewer", "viewerSessionId": "session-id-123"}
-```
-
-**Kick Viewer:**
-```json
-{"type": "kick-viewer", "viewerSessionId": "session-id-123"}
-```
-
-**Ban Viewer:**
-```json
-{"type": "ban-viewer", "viewerSessionId": "session-id-123"}
-```
-
-#### 4. Leave Room
-
+**Request:**
 ```json
 {"type": "leave-room"}
 ```
 
-#### 5. Get Viewer Count (Presenter only)
+#### 4. Get Viewer Count (Presenter only)
 
+**Request:**
 ```json
 {"type": "get-viewer-count"}
 ```
@@ -301,6 +148,12 @@ Include JWT token in WebSocket connection or send after connecting:
 {"type": "viewer-count", "count": 5}
 ```
 
+#### 5. Binary Video Data
+
+- **Presenter** sends H.264 fMP4 video frames as binary WebSocket messages
+- **Server** relays binary data to all viewers in the room
+- **Viewers** receive binary frames for decoding/display
+
 ---
 
 ## 📨 Server Events
@@ -308,20 +161,36 @@ Include JWT token in WebSocket connection or send after connecting:
 | Event | Description |
 |-------|-------------|
 | `connected` | Connection established |
-| `room-created` | Room created (includes `accessCode` if password-protected) |
+| `room-created` | Room created successfully |
 | `room-joined` | Joined room as viewer |
 | `waiting` | Room exists but no presenter yet |
 | `presenter-joined` | Presenter started streaming |
 | `presenter-left` | Presenter disconnected |
 | `viewer-joined` | New viewer joined |
 | `viewer-left` | Viewer disconnected |
-| `viewer-request` | Viewer requesting approval (if `requireApproval` enabled) |
-| `viewer-approved` | Viewer was approved |
-| `viewer-denied` | Viewer was denied |
-| `viewer-kicked` | Viewer was kicked |
-| `viewer-banned` | Viewer was banned |
 | `room-closed` | Room was closed |
 | `error` | Error occurred |
+
+---
+
+## 🧪 Testing
+
+### Using wscat
+
+```bash
+# Install wscat
+npm install -g wscat
+
+# Create a room (Presenter)
+wscat -c ws://localhost:8080/screenshare
+> {"type":"create-room","roomId":"test"}
+
+# Join the room (Viewer - new terminal)
+wscat -c ws://localhost:8080/screenshare
+> {"type":"join-room","roomId":"test"}
+```
+
+See [TESTING_GUIDE.md](TESTING_GUIDE.md) for complete test scenarios.
 
 ---
 
@@ -329,38 +198,168 @@ Include JWT token in WebSocket connection or send after connecting:
 
 ```
 src/main/java/com/screenai/
-├── ScreenAIApplication.java      # Main application entry
+├── ScreenAIApplication.java              # Main entry point
 ├── config/
-│   ├── SecurityConfig.java       # Spring Security configuration
-│   ├── WebSocketConfig.java      # WebSocket configuration
-│   └── JwtConfig.java            # JWT settings
+│   ├── DatabaseInitializer.java          # H2 database setup
+│   ├── JacksonConfig.java                # JSON serialization
+│   └── WebFluxWebSocketConfig.java       # WebSocket configuration
 ├── controller/
-│   └── AuthController.java       # REST API for auth
+│   ├── AuthController.java               # Login, Register, Token Refresh
+│   ├── AdminController.java              # Audit logs, IP blocking
+│   └── PerformanceController.java        # Performance metrics
 ├── dto/
-│   ├── AuthRequest.java          # Login/Register request
-│   ├── AuthResponse.java         # Auth response with tokens
-│   └── RefreshRequest.java       # Token refresh request
+│   ├── AuthResponse.java                 # Auth response DTO
+│   ├── LoginRequest.java                 # Login request DTO
+│   ├── RegisterRequest.java              # Register request DTO
+│   └── RefreshTokenRequest.java          # Token refresh DTO
 ├── handler/
-│   └── ScreenShareHandler.java   # WebSocket message handler
+│   └── ReactiveScreenShareHandler.java   # WebSocket message handler
 ├── model/
-│   ├── User.java                 # User entity
-│   ├── Room.java                 # Room entity with security
-│   └── RefreshToken.java         # Refresh token entity
+│   ├── ReactiveRoom.java                 # Room state with security
+│   ├── User.java                         # User entity with lockout
+│   ├── AuditEvent.java                   # Audit event entity
+│   ├── BlockedIp.java                    # Blocked IP entity
+│   └── PerformanceMetrics.java           # Metrics model
 ├── repository/
-│   ├── UserRepository.java       # User persistence
-│   └── RefreshTokenRepository.java
+│   ├── UserRepository.java               # User data access
+│   ├── AuditEventRepository.java         # Audit log data access
+│   └── BlockedIpRepository.java          # Blocked IP data access
 ├── security/
-│   ├── JwtTokenProvider.java     # JWT generation/validation
-│   ├── JwtAuthenticationFilter.java
-│   ├── RateLimiter.java          # Rate limiting
-│   └── IpBlocker.java            # IP blocking
+│   ├── SecurityConfig.java               # Spring Security config
+│   ├── JwtAuthenticationFilter.java      # JWT filter
+│   └── WebSocketAuthHandler.java         # WebSocket authentication
 ├── service/
-│   ├── AuthService.java          # Authentication logic
-│   ├── RoomService.java          # Room management
-│   └── UserService.java          # User management
+│   ├── AuthService.java                  # Authentication logic
+│   ├── JwtService.java                   # JWT token generation
+│   ├── RateLimitService.java             # Message rate limiting
+│   ├── ConnectionThrottleService.java    # IP throttling
+│   ├── RoomSecurityService.java          # Room password/approval
+│   ├── SecurityAuditService.java         # Event logging
+│   └── PerformanceMonitorService.java    # Performance tracking
 └── validation/
-    └── PasswordValidator.java    # Password policy enforcement
+    └── InputValidator.java               # Input validation
+
 ```
+
+---
+
+## 🔐 Authentication Flow
+
+```
+┌──────────┐     POST /api/auth/login      ┌──────────────────┐
+│  Client  │ ─────────────────────────────►│  AuthController  │
+└──────────┘  {username, password}         └────────┬─────────┘
+                                                    │
+                                                    ▼
+                                           ┌───────────────────┐
+                                           │   AuthService     │
+                                           │ - Validate pass   │
+                                           │ - Check lockout   │
+                                           │ - Generate tokens │
+                                           └────────┬──────────┘
+                                                    │
+                     ┌──────────────────────────────┴─────────────────────────────┐
+                     ▼                                                            ▼
+           ┌─────────────────┐                                         ┌──────────────────┐
+           │   JwtService    │                                         │ SecurityAuditSvc │
+           │ - accessToken   │                                         │ - LOGIN_SUCCESS  │
+           │ - refreshToken  │                                         │ - LOGIN_FAILURE  │
+           └─────────────────┘                                         └──────────────────┘
+```
+
+---
+
+## 📺 Screen Sharing WebSocket Flow
+
+```
+┌──────────────┐                                              ┌───────────────┐
+│  PRESENTER   │                                              │    VIEWERS    │
+└──────┬───────┘                                              └───────┬───────┘
+       │                                                              │
+       │ 1. Connect WS + JWT Token                                    │
+       │─────────────────────────────►┌────────────────────┐          │
+       │                              │ ReactiveScreenShare │          │
+       │                              │     Handler         │          │
+       │                              └─────────┬──────────┘          │
+       │                                        │                      │
+       │ 2. "create-room"                       │ Auth + Rate Check   │
+       │─────────────────────────────►┌─────────▼──────────┐          │
+       │                              │   Create Room      │          │
+       │◄─────────────────────────────│   {roomId, role}   │          │
+       │   "room-created"             └────────────────────┘          │
+       │                                                              │
+       │                                        │ 3. "join-room"      │
+       │                              ┌─────────▼──────────┐◄─────────│
+       │                              │   Add Viewer       │          │
+       │                              │   (password check) │──────────│
+       │                              └────────────────────┘ "viewer-joined"
+       │                                                              │
+       │ 4. Binary Video Frames (H.264/fMP4)                          │
+       │═══════════════════════════►┌────────────────────┐            │
+       │                            │   RELAY to all     │════════════│
+       │                            │   viewers          │            │
+       │                            └────────────────────┘            │
+```
+
+---
+
+## 🛡️ Security Layers
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Security Stack                            │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 1: IP Blocking (ConnectionThrottleService)               │
+│  └─ Blocks IPs with too many failed connections                 │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 2: Rate Limiting (RateLimitService)                      │
+│  └─ Limits messages per session/IP                              │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 3: JWT Authentication (JwtAuthenticationFilter)          │
+│  └─ Validates tokens for REST & WebSocket                       │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 4: Role-Based Access (SecurityConfig)                    │
+│  └─ ADMIN role required for /api/admin/**                       │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 5: Input Validation (InputValidator)                     │
+│  └─ Validates roomId, binary size, JSON payloads                │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 6: Room Security (RoomSecurityService)                   │
+│  └─ Password protection, viewer approval, banning               │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 7: Audit Logging (SecurityAuditService)                  │
+│  └─ Logs all security events with masked usernames              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔑 REST API Endpoints
+
+### Authentication (No token required)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/auth/login` | Login and get tokens |
+| `POST` | `/api/auth/register` | Register new user |
+| `POST` | `/api/auth/refresh` | Refresh access token |
+
+### Admin (Requires ADMIN Bearer token)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/admin/logs` | Get all audit logs |
+| `GET` | `/api/admin/logs?limit=50&offset=0` | Paginated logs |
+| `GET` | `/api/admin/logs/user/{username}` | Logs by username |
+| `GET` | `/api/admin/logs/type/{eventType}` | Logs by event type |
+| `GET` | `/api/admin/logs/severity/{severity}` | Logs by severity |
+| `GET` | `/api/admin/blocked-ips` | Get blocked IPs |
+
+### Default Admin User
+
+| Username | Password | Role |
+|----------|----------|------|
+| `admin` | `Admin@123` | ADMIN |
 
 ---
 
@@ -373,83 +372,94 @@ server:
   port: 8080
 
 spring:
-  datasource:
-    url: jdbc:h2:mem:screenai
-    driver-class-name: org.h2.Driver
+  main:
+    web-application-type: reactive
 
-jwt:
-  secret: your-256-bit-secret-key-here
-  access-token-expiration: 900000      # 15 minutes
-  refresh-token-expiration: 604800000  # 7 days
-
-security:
-  max-failed-attempts: 5
-  lockout-duration: 900000             # 15 minutes
-  rate-limit:
-    messages-per-second: 60
-    burst-size: 100
+logging:
+  level:
+    com.screenai: INFO
 ```
 
----
-
-## 🧪 Testing
-
-### Using wscat
+### Environment Variables
 
 ```bash
-# Install wscat
-npm install -g wscat
-
-# Connect and authenticate
-wscat -c ws://localhost:8080/screenshare
-> {"type":"auth","token":"your-jwt-token"}
-
-# Create a password-protected room
-> {"type":"create-room","roomId":"test","password":"secret123"}
-
-# Join the room (Viewer - new terminal)
-wscat -c ws://localhost:8080/screenshare
-> {"type":"auth","token":"viewer-jwt-token"}
-> {"type":"join-room","roomId":"test","accessCode":"ABC123"}
+# Custom port
+SERVER_PORT=9090 java -jar screenai-server-1.0.0.jar
 ```
 
 ---
 
-## 📊 Performance
+## 🐛 Troubleshooting
 
-| Metric | Value |
-|--------|-------|
-| Connections | 1000+ concurrent |
-| Latency | < 50ms relay |
-| CPU Usage | 5-15% (relay only) |
-| Memory | ~256MB base |
+### Port already in use
+```bash
+lsof -i :8080
+# Kill the process or use different port
+java -jar -Dserver.port=9090 screenai-server-1.0.0.jar
+```
+
+### WebSocket connection fails
+```bash
+# Test if server is running
+curl http://localhost:8080
+
+# Check server logs
+tail -f logs/screenai.log
+```
+
+### No video data received
+- Ensure presenter has created the room first
+- Verify room ID matches between presenter and viewer
+- Check that presenter is sending binary data
 
 ---
 
-## 🛡️ Security
+## 🔧 Tech Stack
 
-ScreenAI implements a multi-layered security architecture including:
+| Component | Technology | Version |
+|-----------|------------|---------|
+| Framework | Spring Boot | 3.5.5 |
+| Reactive | Spring WebFlux | 6.x |
+| Server | Netty | 4.x |
+| Security | Spring Security | 6.x |
+| Database | H2 (In-Memory) | 2.x |
+| Java | OpenJDK | 17+ |
+| Build | Maven | 3.9.x |
 
-| Layer | Features |
-|-------|----------|
-| **Network** | IP blocking, rate limiting (sliding window), connection throttling, security headers |
-| **Authentication** | JWT access tokens (HS256, 15 min), opaque refresh tokens (7 day), BCrypt password hashing (cost 12) |
-| **Authorization** | Role-based access control (USER/ADMIN), room-level permissions, viewer approval workflow |
-| **Data Protection** | AES-256-GCM encrypted client storage, SHA-256 + salt room passwords (timing-safe), input validation |
-| **Audit** | 25+ event types, 5 severity levels, privacy-masked usernames, queryable by user/type/severity |
+---
 
-> **Full details →** [SECURITY.md](docs/SECURITY.md)
+## 🎮 Quick Start Flow
 
-### Security Best Practices for Production
+1. **Start Server**: `mvn spring-boot:run`
+2. **Login** (get token): `POST /api/auth/login` with `admin`/`Admin@123`
+3. **Connect WebSocket**: `ws://localhost:8080/screenshare?token=<JWT>`
+4. **Create Room**: Send `{"type": "create-room", "roomId": "my-room"}`
+5. **Viewers Join**: Connect with `{"type": "join-room", "roomId": "my-room"}`
+6. **Stream Video**: Send binary H.264/fMP4 frames
+7. **View Logs**: `GET /api/admin/logs` (with Bearer token)
 
-1. **Change JWT Secret** — Set `JWT_SECRET` env var with a strong 256-bit+ key (if not set, a random key is generated per startup)
-2. **Set Admin Password** — Set `ADMIN_PASSWORD` env var to bootstrap an admin account (skipped if blank)
-3. **Configure CORS** — Restrict `cors.allowed-origins` to your domains
-4. **Database** — Replace H2 with PostgreSQL/MySQL for persistence
-5. **Encryption Key** — Set `TOKEN_ENCRYPTION_KEY` in client `.env` with a unique 32-char key
-6. **Monitoring** — Set up alerts on `CRITICAL` and `ERROR` severity audit events
-7. **Rate Limits** — Tune based on expected traffic patterns
-8. **Reverse Proxy** — Place behind nginx/Caddy; don't expose port 8080 directly
+---
+
+## 📋 Security Testing
+
+See [SECURITY_TEST.md](SECURITY_TEST.md) for complete security testing guide with Postman.
+
+### Security Features Summary
+
+| Feature | How to Test | Expected Result |
+|---------|-------------|-----------------|
+| JWT Authentication | Login → Use token | Token works for 15 min |
+| Password Validation | Register with weak password | Rejected |
+| Account Lockout | 5 wrong passwords | Account locked 15 min |
+| Audit Logging | Any action → Check logs | Event recorded |
+| Username Masking | View logs | Usernames show as `ad***in` |
+| Role-Based Access | USER tries admin endpoint | 403 Forbidden |
+
+---
+
+## 📄 Related Projects
+
+- **[ScreenAI-Client](https://github.com/vijayvir/ScreenAiClient)** - JavaFX desktop client for screen sharing
 
 ---
 
