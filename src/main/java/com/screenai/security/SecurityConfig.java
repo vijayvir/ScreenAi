@@ -76,6 +76,12 @@ public class SecurityConfig {
                         .pathMatchers("/actuator/info").permitAll()
                         .pathMatchers("/h2-console/**").permitAll()
                         
+                        // Viewer UI and capture endpoints - publicly accessible
+                        .pathMatchers("/", "/viewer").permitAll()
+                        .pathMatchers("/viewer.js").permitAll()
+                        .pathMatchers("/capture/**").permitAll()
+                        .pathMatchers("/api/status", "/api/start-capture", "/api/stop-capture").permitAll()
+                        
                         // WebSocket endpoint - authentication handled in handler
                         .pathMatchers("/screenshare/**").permitAll()
                         

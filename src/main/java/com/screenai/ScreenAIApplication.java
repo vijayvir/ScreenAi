@@ -9,6 +9,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.beans.factory.annotation.Value;
 
+import com.screenai.service.ScreenCaptureService;
+
 /**
  * Main application class for ScreenAI-Server
  * 
@@ -27,6 +29,12 @@ public class ScreenAIApplication implements CommandLineRunner {
 
 	@Value("${server.port:8080}")
 	private int serverPort;
+
+	private final ScreenCaptureService screenCaptureService;
+
+	public ScreenAIApplication(ScreenCaptureService screenCaptureService) {
+		this.screenCaptureService = screenCaptureService;
+	}
 
 	public static void main(String[] args) {
 		SpringApplication.run(ScreenAIApplication.class, args);
@@ -68,7 +76,26 @@ public class ScreenAIApplication implements CommandLineRunner {
 		System.out.println("   wscat -c ws://localhost:" + serverPort + "/screenshare");
 		System.out.println("   > {\"type\":\"create-room\",\"roomId\":\"test\"}");
 		System.out.println("");
+		System.out.println("🖥️  Screen Capture Viewer:");
+		System.out.println("   http://localhost:" + serverPort + "/");
+		System.out.println("   ws://localhost:" + serverPort + "/capture");
+		System.out.println("");
 		System.out.println("═══════════════════════════════════════════════════════════");
+
+		// Attempt to initialise and start server-side screen capture.
+		// This is a best-effort operation: if the server is running headless
+		// (no display) the capture service will log a warning and skip startup.
+		try {
+			screenCaptureService.initialize();
+			if (screenCaptureService.isInitialized()) {
+				screenCaptureService.startCapture();
+				System.out.println("🎥 Screen capture started (" + screenCaptureService.getCaptureMethod() + ")");
+			} else {
+				System.out.println("ℹ️  Screen capture not started (headless or display unavailable)");
+			}
+		} catch (Exception e) {
+			System.out.println("ℹ️  Screen capture unavailable: " + e.getMessage());
+		}
 	}
 	
 	/**

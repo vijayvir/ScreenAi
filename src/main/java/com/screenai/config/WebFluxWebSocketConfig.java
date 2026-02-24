@@ -14,6 +14,7 @@ import org.springframework.web.reactive.socket.server.support.HandshakeWebSocket
 import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter;
 import org.springframework.web.reactive.socket.server.upgrade.ReactorNettyRequestUpgradeStrategy;
 
+import com.screenai.handler.ReactiveCaptureViewHandler;
 import com.screenai.handler.ReactiveScreenShareHandler;
 
 /**
@@ -24,9 +25,12 @@ import com.screenai.handler.ReactiveScreenShareHandler;
 public class WebFluxWebSocketConfig {
 
     private final ReactiveScreenShareHandler screenShareHandler;
+    private final ReactiveCaptureViewHandler captureViewHandler;
 
-    public WebFluxWebSocketConfig(ReactiveScreenShareHandler screenShareHandler) {
+    public WebFluxWebSocketConfig(ReactiveScreenShareHandler screenShareHandler,
+                                  ReactiveCaptureViewHandler captureViewHandler) {
         this.screenShareHandler = screenShareHandler;
+        this.captureViewHandler = captureViewHandler;
     }
 
     /**
@@ -36,6 +40,7 @@ public class WebFluxWebSocketConfig {
     public HandlerMapping webSocketHandlerMapping() {
         Map<String, WebSocketHandler> map = new HashMap<>();
         map.put("/screenshare", screenShareHandler);
+        map.put("/capture", captureViewHandler);
 
         SimpleUrlHandlerMapping handlerMapping = new SimpleUrlHandlerMapping();
         handlerMapping.setOrder(Ordered.HIGHEST_PRECEDENCE);
