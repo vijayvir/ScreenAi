@@ -31,16 +31,22 @@ public class WebSocketAuthHandler {
 
     /**
      * Authenticate WebSocket connection from handshake headers.
-     * Returns the authenticated username or empty if authentication fails.
+     * If a valid JWT is provided, returns the authenticated user.
+     * If no token is provided, returns a guest user (TeamViewer-style anonymous
+     * access).
+     * If an invalid token is provided, returns empty (connection will be rejected).
      */
     public Mono<AuthenticatedUser> authenticate(HttpHeaders headers, String sessionId, String ipAddress) {
         String token = extractTokenFromHeaders(headers);
 
+        // No token → allow as guest (TeamViewer-style: no login required)
         if (token == null || token.isEmpty()) {
-            log.debug("No token provided for WebSocket connection");
-            return Mono.empty();
+            String guestUsername = "guest_" + sessionId.substring(0, Math.min(8, sessionId.length()));
+            log.info("Guest WebSocket connection: {} from IP: {}", guestUsername, ipAddress);
+            return Mono.just(new AuthenticatedUser(guestUsername, "GUEST", null));
         }
 
+        // Token provided → validate it
         try {
             Claims claims = jwtService.validateToken(token);
             String username = claims.getSubject();
@@ -51,10 +57,11 @@ public class WebSocketAuthHandler {
                 return Mono.just(new AuthenticatedUser(username, role, token));
             }
         } catch (JwtException e) {
-            log.debug("WebSocket authentication failed: {}", e.getMessage());
+            log.debug("WebSocket authentication failed (invalid token): {}", e.getMessage());
             auditService.logInvalidToken(sessionId, ipAddress, e.getMessage()).subscribe();
         }
 
+        // Invalid token → reject (do NOT fall back to guest)
         return Mono.empty();
     }
 
