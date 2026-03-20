@@ -43,6 +43,8 @@ ScreenAI-Server acts as a secure relay hub between presenters (screen sharers) a
 ## ✨ Features
 
 ### Core Features
+- ✅ **Guest Access (TeamViewer Model)** - No login required; guests auto-connect with a session ID
+- ✅ **Password-Protected Rooms** - Rooms secured by password; validated server-side with BCrypt
 - ✅ **Reactive WebSocket Relay** - Non-blocking I/O with Spring WebFlux + Netty
 - ✅ **Room-Based Architecture** - Isolated streaming rooms (1 presenter, multiple viewers)
 - ✅ **Binary Video Streaming** - H.264/fMP4 video relay support
@@ -83,10 +85,11 @@ java -version
 
 ### Run the Server
 
-**Option 1: Quick Start (dev mode — no admin account, random JWT key)**
+**Quick Start (dev mode — no admin account, random JWT key)**
 ```bash
 mvn spring-boot:run
 ```
+The server starts instantly. Clients can connect as guests — no accounts needed.
 
 **Option 2: With Admin Account + Persistent JWT**
 ```bash
@@ -201,6 +204,12 @@ ws://localhost:8080/screenshare
 ```
 
 ### Authentication
+Authentication is **optional** — the server supports both guest access and JWT-authenticated sessions.
+
+**Guest Mode (default):**
+Clients connect without any credentials. The server auto-assigns a guest session ID (e.g., `guest_6d618b43`) with `GUEST` role. Guests can create and join password-protected rooms.
+
+**Authenticated Mode:**
 Include JWT token in WebSocket connection or send after connecting:
 ```json
 {"type": "auth", "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}
@@ -307,7 +316,7 @@ Include JWT token in WebSocket connection or send after connecting:
 
 | Event | Description |
 |-------|-------------|
-| `connected` | Connection established |
+| `connected` | Connection established (includes `sessionId`, `username`, `isGuest`) |
 | `room-created` | Room created (includes `accessCode` if password-protected) |
 | `room-joined` | Joined room as viewer |
 | `waiting` | Room exists but no presenter yet |

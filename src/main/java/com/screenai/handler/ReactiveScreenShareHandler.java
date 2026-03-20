@@ -252,7 +252,10 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
 
         // Check if this is an init segment (SPS/PPS or ftyp/moov)
         if (isInitSegment(videoData)) {
-            logger.info("🎬 Init segment received for room {} ({} bytes)", roomId, videoData.length);
+            byte[] prev = room.getCachedInitSegment();
+            if (prev == null || prev.length != videoData.length) {
+                logger.info("🎬 Init segment received for room {} ({} bytes)", roomId, videoData.length);
+            }
             room.setCachedInitSegment(videoData);
         }
 
