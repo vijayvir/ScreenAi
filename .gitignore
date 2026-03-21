@@ -39,15 +39,9 @@ build/
 ### OS ###
 .DS_Store
 Thumbs.db
-desktop.ini
 *.swp
 *.swo
 *~
-
-### H2 Database ###
-*.db
-*.mv.db
-*.trace.db
 
 ### JavaCV/FFmpeg temporary files ###
 *.mp4
@@ -59,13 +53,6 @@ desktop.ini
 ### Environment-specific configs ###
 application-local.properties
 application-dev.properties
-
-### Environment Variables (NEVER COMMIT!) ###
-.env
-.env.local
-.env.*.local
-*.env
-!.env.example
 
 ### Temporary files ###
 *.tmp

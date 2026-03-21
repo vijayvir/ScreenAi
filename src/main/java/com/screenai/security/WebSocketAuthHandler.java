@@ -6,15 +6,15 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.net.URI;
 import java.util.Optional;
 
 /**
  * Handles WebSocket authentication by validating JWT tokens.
- * Tokens must be provided via Authorization header: Bearer <JWT>
+ * Tokens can be passed via query parameter: ws://host/screenshare?token=JWT
  */
 @Component
 public class WebSocketAuthHandler {
@@ -30,23 +30,17 @@ public class WebSocketAuthHandler {
     }
 
     /**
-     * Authenticate WebSocket connection from handshake headers.
-     * If a valid JWT is provided, returns the authenticated user.
-     * If no token is provided, returns a guest user (TeamViewer-style anonymous
-     * access).
-     * If an invalid token is provided, returns empty (connection will be rejected).
+     * Authenticate WebSocket connection from URI query params.
+     * Returns the authenticated username or empty if authentication fails.
      */
-    public Mono<AuthenticatedUser> authenticate(HttpHeaders headers, String sessionId, String ipAddress) {
-        String token = extractTokenFromHeaders(headers);
+    public Mono<AuthenticatedUser> authenticate(URI uri, String sessionId, String ipAddress) {
+        String token = extractTokenFromUri(uri);
 
-        // No token → allow as guest (TeamViewer-style: no login required)
         if (token == null || token.isEmpty()) {
-            String guestUsername = "guest_" + sessionId.substring(0, Math.min(8, sessionId.length()));
-            log.info("Guest WebSocket connection: {} from IP: {}", guestUsername, ipAddress);
-            return Mono.just(new AuthenticatedUser(guestUsername, "GUEST", null));
+            log.debug("No token provided for WebSocket connection");
+            return Mono.empty();
         }
 
-        // Token provided → validate it
         try {
             Claims claims = jwtService.validateToken(token);
             String username = claims.getSubject();
@@ -57,30 +51,30 @@ public class WebSocketAuthHandler {
                 return Mono.just(new AuthenticatedUser(username, role, token));
             }
         } catch (JwtException e) {
-            log.debug("WebSocket authentication failed (invalid token): {}", e.getMessage());
+            log.debug("WebSocket authentication failed: {}", e.getMessage());
             auditService.logInvalidToken(sessionId, ipAddress, e.getMessage()).subscribe();
         }
 
-        // Invalid token → reject (do NOT fall back to guest)
         return Mono.empty();
     }
 
     /**
-     * Extract bearer token from Authorization header.
+     * Extract token from WebSocket URI query parameters.
      */
-    private String extractTokenFromHeaders(HttpHeaders headers) {
-        if (headers == null) {
+    private String extractTokenFromUri(URI uri) {
+        if (uri == null || uri.getQuery() == null) {
             return null;
         }
 
-        String authHeader = headers.getFirst(HttpHeaders.AUTHORIZATION);
-        if (authHeader == null || authHeader.isBlank()) {
-            return null;
+        String query = uri.getQuery();
+        for (String param : query.split("&")) {
+            String[] keyValue = param.split("=", 2);
+            if (keyValue.length == 2 && "token".equals(keyValue[0])) {
+                return keyValue[1];
+            }
         }
-        if (!authHeader.startsWith("Bearer ")) {
-            return null;
-        }
-        return authHeader.substring("Bearer ".length()).trim();
+
+        return null;
     }
 
     /**

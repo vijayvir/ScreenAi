@@ -135,7 +135,7 @@ public class AuthController {
      */
     @GetMapping("/validate")
     public Mono<ResponseEntity<AuthResponse>> validateToken(
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+            @RequestHeader("Authorization") String authHeader) {
 
         String token = jwtService.extractTokenFromHeader(authHeader);
 

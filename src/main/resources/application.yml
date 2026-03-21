@@ -1,9 +1,9 @@
 server:
-  port: ${SERVER_PORT:8080}
+  port: 8080
   # Netty server configuration (WebFlux uses Netty by default)
   netty:
-    connection-timeout: ${CONNECTION_TIMEOUT:60s}
-    idle-timeout: ${IDLE_TIMEOUT:600s}
+    connection-timeout: 60s
+    idle-timeout: 600s
 
 spring:
   application:
@@ -18,101 +18,82 @@ spring:
     base-path: /
   codec:
     # Max in-memory size for WebFlux codecs (for large video frames)
-    max-in-memory-size: ${MAX_BINARY_MESSAGE_SIZE:10485760}
+    max-in-memory-size: 10MB
   
   # R2DBC Database Configuration (Reactive)
   r2dbc:
-    url: ${DATABASE_URL:r2dbc:h2:mem:///screenai_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
-    username: ${DB_USERNAME:sa}
-    password: ${DB_PASSWORD:}
+    url: r2dbc:h2:mem:///screenai_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: 
     pool:
       initial-size: 5
       max-size: 10
   
-  # H2 Console (dev only - disable in production!)
+  # H2 Console (dev only)
   h2:
     console:
-      enabled: ${H2_CONSOLE_ENABLED:false}
+      enabled: true
       path: /h2-console
-
-# =====================================================
-# CORS Configuration
-# =====================================================
-cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080,https://localhost:8443}
 
 # =====================================================
 # Security Configuration
 # =====================================================
 security:
   jwt:
-    # Secret key for JWT signing — MUST be set via JWT_SECRET env var in production
-    # WARNING: The default is for dev only and will generate a random key on each startup
-    secret: ${JWT_SECRET:}
+    # Secret key for JWT signing (override in production via JWT_SECRET env var)
+    secret: ${JWT_SECRET:screenai-dev-secret-key-change-in-production-minimum-256-bits}
     # Access token expiration (15 minutes)
-    access-token-expiration: ${ACCESS_TOKEN_EXPIRATION:900000}
+    access-token-expiration: 900000
     # Refresh token expiration (7 days)
-    refresh-token-expiration: ${REFRESH_TOKEN_EXPIRATION:604800000}
+    refresh-token-expiration: 604800000
     # Token issuer
-    issuer: ${JWT_ISSUER:ScreenAI}
+    issuer: ScreenAI
   
   # Password policy
   password:
-    min-length: ${PASSWORD_MIN_LENGTH:8}
-    require-uppercase: ${PASSWORD_REQUIRE_UPPERCASE:true}
-    require-lowercase: ${PASSWORD_REQUIRE_LOWERCASE:true}
-    require-digit: ${PASSWORD_REQUIRE_DIGIT:true}
-    require-special: ${PASSWORD_REQUIRE_SPECIAL:true}
+    min-length: 8
+    require-uppercase: true
+    require-lowercase: true
+    require-digit: true
+    require-special: true
   
   # Account lockout
   lockout:
-    max-attempts: ${LOCKOUT_MAX_ATTEMPTS:5}
-    duration-minutes: ${LOCKOUT_DURATION_MINUTES:15}
+    max-attempts: 5
+    duration-minutes: 15
   
   # Rate limiting
   rate-limit:
     # Messages per second per session
-    messages-per-second: ${RATE_LIMIT_MESSAGES_PER_SECOND:100}
+    messages-per-second: 100
     # Room creations per hour per IP
-    room-creations-per-hour: ${RATE_LIMIT_ROOM_CREATIONS_PER_HOUR:10}
+    room-creations-per-hour: 10
     # Failed auth attempts before IP block
-    failed-auth-before-block: ${RATE_LIMIT_FAILED_AUTH_BEFORE_BLOCK:5}
+    failed-auth-before-block: 5
     # IP block duration in minutes
-    ip-block-duration-minutes: ${IP_BLOCK_DURATION_MINUTES:15}
+    ip-block-duration-minutes: 15
   
   # Resource limits
   resource-limits:
-    max-active-rooms: ${MAX_ACTIVE_ROOMS:100}
-    max-viewers-per-room: ${MAX_VIEWERS_PER_ROOM:50}
-    max-rooms-per-user: ${MAX_ROOMS_PER_USER:5}
-    max-binary-message-size: ${MAX_BINARY_MESSAGE_SIZE:10485760}
+    max-active-rooms: 100
+    max-viewers-per-room: 50
+    max-rooms-per-user: 5
+    max-binary-message-size: 10485760
   
   # Room security
   room:
     # Access code expiration (24 hours)
-    access-code-expiration-hours: ${ROOM_ACCESS_CODE_EXPIRATION_HOURS:24}
+    access-code-expiration-hours: 24
     # Idle room timeout (1 hour)
-    idle-timeout-minutes: ${ROOM_IDLE_TIMEOUT_MINUTES:60}
+    idle-timeout-minutes: 60
 
 # =====================================================
 # Admin Configuration
 # =====================================================
 admin:
-  # Default admin credentials — set via ADMIN_USERNAME / ADMIN_PASSWORD env vars
+  # Default admin credentials (override in production)
   username: ${ADMIN_USERNAME:admin}
-  password: ${ADMIN_PASSWORD:}
-
-# =====================================================
-# Management / Actuator
-# =====================================================
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-  endpoint:
-    health:
-      show-details: never
+  password: ${ADMIN_PASSWORD:admin123}
 
 # Logging configuration
 logging:

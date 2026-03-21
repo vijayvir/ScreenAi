@@ -4,10 +4,10 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.util.Enumeration;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.beans.factory.annotation.Value;
 
 /**
  * Main application class for ScreenAI-Server
@@ -57,7 +57,7 @@ public class ScreenAIApplication implements CommandLineRunner {
 		}
 		
 		System.out.println("");
-		System.out.println("Server Mode: WebFlux + Netty (Non-Blocking)");
+		System.out.println("🔧 Server Mode: WebFlux + Netty (Non-Blocking)");
 		System.out.println("   ✅ Reactive WebSocket handling");
 		System.out.println("   ✅ Non-blocking I/O via Netty");
 		System.out.println("   ✅ Automatic backpressure handling");
