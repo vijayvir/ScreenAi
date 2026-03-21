@@ -11,6 +11,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 /**
  * Service for logging security-related events.
@@ -198,7 +199,7 @@ public class SecurityAuditService {
                 .severity(severity)
                 .build();
 
-        return auditEventRepository.save(event).then();
+        return auditEventRepository.save(Objects.requireNonNull(event, "event")).then();
     }
 
     // ==================== Query Methods ====================
@@ -208,7 +209,8 @@ public class SecurityAuditService {
     }
 
     public Flux<AuditEvent> getEventsByUsername(String username) {
-        return auditEventRepository.findByUsernameOrderByCreatedAtDesc(username);
+        // Usernames are stored masked for privacy, so normalize the query value.
+        return auditEventRepository.findByUsernameOrderByCreatedAtDesc(maskSensitiveData(username));
     }
 
     public Flux<AuditEvent> getEventsByType(String eventType) {

@@ -1,7 +1,5 @@
 package com.screenai.controller;
 
-import com.screenai.dto.ErrorResponse;
-import com.screenai.dto.ErrorResponse.ErrorCode;
 import com.screenai.model.AuditEvent;
 import com.screenai.model.BlockedIp;
 import com.screenai.repository.BlockedIpRepository;

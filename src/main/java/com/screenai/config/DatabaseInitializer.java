@@ -10,6 +10,8 @@ import org.springframework.r2dbc.connection.init.ConnectionFactoryInitializer;
 import org.springframework.r2dbc.connection.init.ResourceDatabasePopulator;
 import io.r2dbc.spi.ConnectionFactory;
 
+import java.util.Objects;
+
 @Configuration
 public class DatabaseInitializer {
     
@@ -21,7 +23,7 @@ public class DatabaseInitializer {
         log.info("Initializing database schema...");
         
         ConnectionFactoryInitializer initializer = new ConnectionFactoryInitializer();
-        initializer.setConnectionFactory(connectionFactory);
+        initializer.setConnectionFactory(Objects.requireNonNull(connectionFactory, "connectionFactory"));
         
         ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
         populator.addScript(new ClassPathResource("schema.sql"));

@@ -6,6 +6,7 @@ import java.util.Map;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.lang.NonNull;
 import org.springframework.web.reactive.HandlerMapping;
 import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping;
 import org.springframework.web.reactive.socket.WebSocketHandler;
@@ -47,6 +48,7 @@ public class WebFluxWebSocketConfig {
      * WebSocket handler adapter with custom Netty configuration
      */
     @Bean
+    @SuppressWarnings("null")
     public WebSocketHandlerAdapter handlerAdapter() {
         return new WebSocketHandlerAdapter(webSocketService());
     }
@@ -57,7 +59,7 @@ public class WebFluxWebSocketConfig {
      * - No compression (video is already compressed)
      */
     @Bean
-    public WebSocketService webSocketService() {
+    public @NonNull WebSocketService webSocketService() {
         // Configure large max frame size for video streaming (10MB)
         ReactorNettyRequestUpgradeStrategy strategy = new ReactorNettyRequestUpgradeStrategy(
             () -> reactor.netty.http.server.WebsocketServerSpec.builder()

@@ -86,11 +86,11 @@ SET MAVEN_JAVA_EXE="%JAVA_HOME%\bin\java.exe"
 set WRAPPER_JAR="%MAVEN_PROJECTBASEDIR%\.mvn\wrapper\maven-wrapper.jar"
 set WRAPPER_LAUNCHER=org.apache.maven.wrapper.MavenWrapperMain
 
-set DOWNLOAD_URL="https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper/3.2.0/maven-wrapper-3.2.0.jar"
+set WRAPPER_URL="https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper/3.2.0/maven-wrapper-3.2.0.jar"
 
 FOR /F "usebackq tokens=1,* delims==" %%A IN ("%MAVEN_PROJECTBASEDIR%\.mvn\wrapper\maven-wrapper.properties") DO (
-    if "%%A"=="distributionUrl" set DOWNLOAD_URL=%%B
-    if "%%A"=="wrapperUrl" set WRAPPER_JAR=%%B
+    @REM distributionUrl is used by the wrapper itself; it must not affect wrapper jar download.
+    if "%%A"=="wrapperUrl" set WRAPPER_URL=%%B
 )
 
 @REM Extension to allow automatically downloading the maven-wrapper.jar from Maven-central
@@ -101,11 +101,11 @@ if exist %WRAPPER_JAR% (
     )
 ) else (
     if not "%MVNW_REPOURL%" == "" (
-        set DOWNLOAD_URL="%MVNW_REPOURL%/org/apache/maven/wrapper/maven-wrapper/3.2.0/maven-wrapper-3.2.0.jar"
+        set WRAPPER_URL="%MVNW_REPOURL%/org/apache/maven/wrapper/maven-wrapper/3.2.0/maven-wrapper-3.2.0.jar"
     )
     if "%MVNW_VERBOSE%" == "true" (
         echo Couldn't find %WRAPPER_JAR%, downloading it ...
-        echo Downloading from: %DOWNLOAD_URL%
+        echo Downloading from: %WRAPPER_URL%
     )
 
     powershell -Command "&{"^
@@ -113,7 +113,7 @@ if exist %WRAPPER_JAR% (
         "if (-not ([string]::IsNullOrEmpty('%MVNW_USERNAME%') -and [string]::IsNullOrEmpty('%MVNW_PASSWORD%'))) {"^
         "$webclient.Credentials = new-object System.Net.NetworkCredential('%MVNW_USERNAME%', '%MVNW_PASSWORD%');"^
         "}"^
-        "[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12; $webclient.DownloadFile('%DOWNLOAD_URL%', '%WRAPPER_JAR%')"^
+        "[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12; $webclient.DownloadFile('%WRAPPER_URL%', %WRAPPER_JAR%)"^
         "}"
     if "%ERRORLEVEL%" == "0" (
         if "%MVNW_VERBOSE%" == "true" (
@@ -140,18 +140,7 @@ if exist "%MAVEN_PROJECTBASEDIR%\mvnw.cmd" goto skipRcCmd
 
 :skipRcCmd
 
-setlocal enabledelayedexpansion
-set CMD_LINE_ARGS=
-for /F "usebackq tokens=*" %%a in ('findstr /v "^@echo off" ^"%MAVEN_PROJECTBASEDIR%\mvnw.cmd"') do (
-    set "line=%%a"
-    setlocal enabledelayedexpansion
-    set "line=!line:@@=@!"
-    if not "!line!" == "" (
-        set "CMD_LINE_ARGS=!CMD_LINE_ARGS! !line!"
-    )
-    endlocal
-)
-set "CMD_LINE_ARGS=%CMD_LINE_ARGS:*findstr=findstr"
+setlocal
 
 %MAVEN_JAVA_EXE% %JVM_CONFIG_MAVEN_PROPS% %MAVEN_OPTS% %MAVEN_DEBUG_OPTS% -classpath %WRAPPER_JAR% "-Dclassworlds.conf=%MAVEN_PROJECTBASEDIR%\.mvn\wrapper\m2.conf" "-Dmaven.home=%MAVEN_PROJECTBASEDIR%\.mvn\wrapper" "-Dmaven.multiModuleProjectDirectory=%MAVEN_PROJECTBASEDIR%" %WRAPPER_LAUNCHER% %MAVEN_CONFIG% %*
 if ERRORLEVEL 1 goto error

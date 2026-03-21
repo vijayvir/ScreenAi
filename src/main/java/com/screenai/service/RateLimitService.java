@@ -165,10 +165,6 @@ public class RateLimitService {
 
             return false;
         }
-
-        int getCurrentCount() {
-            return requestCount.get();
-        }
     }
 
     /**

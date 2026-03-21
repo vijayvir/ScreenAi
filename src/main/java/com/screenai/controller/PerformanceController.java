@@ -81,16 +81,18 @@ public class PerformanceController {
     @GetMapping("/status")
     public ResponseEntity<MonitoringStatus> getMonitoringStatus() {
         boolean isActive = performanceMonitor.isMonitoring();
-        PerformanceMetrics metrics = isActive ? performanceMonitor.getCurrentMetrics() : null;
-        
-        MonitoringStatus status = new MonitoringStatus(
-            isActive,
-            isActive ? metrics.getEncoderType() : "none",
-            isActive ? metrics.getFps() : 0.0,
-            isActive ? metrics.getTotalFrames() : 0
-        );
-        
-        return ResponseEntity.ok(status);
+
+        if (!isActive) {
+            return ResponseEntity.ok(new MonitoringStatus(false, "none", 0.0, 0));
+        }
+
+        PerformanceMetrics metrics = performanceMonitor.getCurrentMetrics();
+        return ResponseEntity.ok(new MonitoringStatus(
+                true,
+                metrics.getEncoderType(),
+                metrics.getFps(),
+                metrics.getTotalFrames()
+        ));
     }
 
     /**

@@ -3,11 +3,13 @@ package com.screenai.handler;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.WebSocketMessage;
@@ -92,7 +94,8 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
     }
     
     @Override
-    public Mono<Void> handle(WebSocketSession session) {
+    @SuppressWarnings("null")
+    public @NonNull Mono<Void> handle(@NonNull WebSocketSession session) {
         String sessionId = session.getId();
         String ipAddress = extractIpAddress(session);
         
@@ -130,6 +133,7 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
                     .then();
                 
                 // Send outbound messages
+                @SuppressWarnings("null")
                 Mono<Void> output = session.send(outboundSink.asFlux());
                 
                 // Combine input and output - both must complete
@@ -277,9 +281,8 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
                     try {
                         WebSocketSession viewerSession = viewerInfo.session();
                         if (viewerSession.isOpen()) {
-                            WebSocketMessage binaryMsg = viewerSession.binaryMessage(factory -> 
-                                factory.wrap(videoData)
-                            );
+                            @SuppressWarnings("null")
+                            WebSocketMessage binaryMsg = viewerSession.binaryMessage(factory -> factory.wrap(videoData));
                             Sinks.EmitResult result = sink.tryEmitNext(binaryMsg);
                             if (result.isSuccess()) {
                                 successCount++;
@@ -544,9 +547,9 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
         byte[] initSegment = room.getCachedInitSegment();
         if (initSegment != null && initSegment.length > 0) {
             try {
-                WebSocketMessage binaryMsg = session.binaryMessage(factory -> 
-                    factory.wrap(initSegment)
-                );
+                byte[] nonNullInitSegment = initSegment;
+                @SuppressWarnings("null")
+                WebSocketMessage binaryMsg = session.binaryMessage(factory -> factory.wrap(nonNullInitSegment));
                 if (sink != null) {
                     sink.tryEmitNext(binaryMsg);
                     logger.info("📤 Sent init segment ({} bytes) to viewer {}", initSegment.length, sessionId);
@@ -568,6 +571,7 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
     /**
      * Notify presenter of pending viewer request
      */
+    @SuppressWarnings("null")
     private void notifyPresenterOfPendingViewer(ReactiveRoom room, String viewerSessionId, String viewerUsername) {
         String presenterSessionId = room.getPresenterSessionId();
         Sinks.Many<WebSocketMessage> sink = sessionSinks.get(presenterSessionId);
@@ -578,6 +582,7 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
                     "{\"type\":\"viewer-request\",\"viewerSessionId\":\"%s\",\"viewerUsername\":\"%s\",\"pendingCount\":%d}",
                     viewerSessionId, viewerUsername != null ? viewerUsername : "anonymous", room.getPendingViewerCount()
                 );
+                @SuppressWarnings("null")
                 WebSocketMessage msg = room.getPresenterSession().textMessage(message);
                 sink.tryEmitNext(msg);
             } catch (Exception e) {
@@ -965,12 +970,14 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
     /**
      * Notify presenter of current viewer count
      */
+    @SuppressWarnings("null")
     private void notifyPresenterOfViewerCount(ReactiveRoom room) {
         String presenterSessionId = room.getPresenterSessionId();
         Sinks.Many<WebSocketMessage> sink = sessionSinks.get(presenterSessionId);
         
         if (sink != null && room.getPresenterSession() != null) {
             try {
+                @SuppressWarnings("null")
                 String message = String.format("{\"type\":\"viewer-count\",\"count\":%d}", room.getViewerCount());
                 WebSocketMessage msg = room.getPresenterSession().textMessage(message);
                 sink.tryEmitNext(msg);
@@ -984,6 +991,9 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
      * Send text message to a session
      */
     private void sendTextToSession(WebSocketSession session, String text) {
+        if (text == null) {
+            return;
+        }
         Sinks.Many<WebSocketMessage> sink = sessionSinks.get(session.getId());
         if (sink != null) {
             try {
@@ -999,10 +1009,12 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
      * Send error message to a session with error code
      */
     private void sendError(WebSocketSession session, ErrorCode errorCode, String errorMessage) {
+        ErrorCode safeErrorCode = errorCode != null ? errorCode : ErrorCode.GENERAL;
+        String safeErrorMessage = errorMessage != null ? errorMessage : "";
         String response = String.format(
             "{\"type\":\"error\",\"code\":\"%s\",\"message\":\"%s\"}",
-            errorCode.getCode(),
-            errorMessage.replace("\"", "\\\"")
+            safeErrorCode.getCode(),
+            safeErrorMessage.replace("\"", "\\\"")
         );
         sendTextToSession(session, response);
     }
@@ -1018,18 +1030,19 @@ public class ReactiveScreenShareHandler implements WebSocketHandler {
      * Create welcome message
      */
     private String createWelcomeMessage(String sessionId, AuthenticatedUser user) {
+        String safeSessionId = Objects.requireNonNull(sessionId, "sessionId");
         String username = user != null ? user.username() : "anonymous";
         return String.format(
             "{\"type\":\"connected\",\"sessionId\":\"%s\",\"username\":\"%s\",\"message\":\"Connected to ScreenAI Relay Server (WebFlux+Netty)\",\"role\":\"pending\"}",
-            sessionId, username
+            safeSessionId, username
         );
     }
     
     /**
      * Check if binary data is an init segment (H.264 SPS/PPS or fMP4 ftyp/moov)
      */
-    private boolean isInitSegment(byte[] data) {
-        if (data == null || data.length < 4) {
+    private boolean isInitSegment(@NonNull byte[] data) {
+        if (data.length < 4) {
             return false;
         }
         
